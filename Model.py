@@ -131,6 +131,10 @@ class GAN(pl.LightningModule):
 
     #TODO test步骤的目的依旧是看4个g_loss，加上d_loss(gan后期应该没有意义)，以及最后看准确率
     # 和test步骤书写，目的是关注准确率
+    # 测试阶段4个loss，loss_reconst,g_loss,loss_classification因为标签顺序不明都没了，d_loss可以有但没有意义
+    # loss_self可以计算，关键是accuracy，这里考虑的是两个pred都算标签然后合起来看总的准确率，
+    # 分为全对，半对，都不对三种，并计算总共预测对的数目，需要统计对的个数，所以test只有两个loss，loss_self和d_loss(没用)
+    # 加上一个accuracy
     def test_step(self, batch, batch_idx):
         x, y, x_simple1, x_simple2, y_simple1, y_simple2, x_pure = batch
         generator1, generator2 = self(x)
@@ -138,54 +142,48 @@ class GAN(pl.LightningModule):
         pred1 = self.cnn_classification(generator1)
         pred2 = self.cnn_classification(generator2)
 
-        
-        self.discriminator_label = torch.cat((x_simple1, x_simple2), 1)
-
-        #第四个loss
-        loss_classification = loss_classification(self.cnn_classification, self.generator1, self.generator2, y_simple1, y_simple2)
+        # discriminator_loss 这个也要顺序，所以继续无视，只剩loss_self一种
+        # self.discriminator_input = torch.cat((generator1, generator2), 1)
+        # self.discriminator_label = torch.cat((x_simple1, x_simple2), 1)
+        # d_loss = discriminator_loss(self.discriminator_input, self.discriminator_label)
         #试图让生成pure数据时不进行反向传播
         x_pure = x_pure.detach()
         pure1, pure2 = self(x_pure)
-
         loss_self = loss_self(generator1, generator2, pure1, pure2)
-        generator_loss = generator_loss(discriminator_input)
+    
+        tqdm_dict = {'loss_self': loss_self}
 
-        g_loss = loss_self + loss_reconst + generator_loss + loss_classification
-        d_loss = discriminator_loss(self.discriminator_input, self.discriminator_label)
-
-        tqdm_dict = {'g_loss': g_loss, 'loss_self': loss_self, 'loss_reconst': loss_reconst,
-                     'loss_generator': generator_loss, 'loss_classification': loss_classification, 'd_loss', d_loss}
-
-        pred1 = self.cnn_classification(generator1)
-        pred2 = self.cnn_classification(generator2)
-        test_acc = (accuracy(pred1, y_simple1) + accuracy(pred2, y_simple2)) / 2.0
-
+        pred_all = torch.cat((pred1, pred2), 1)
+        pred, _ = torch.sort(pred_all)
+        label_all = torch.cat((y_simple1, y_simple2), 1)
+        label, _ = torch.sort(label_all)
+        num = torch.sum((b == d).int(), dim=1)
         output = OrderedDict({
-                'loss': tqdm_dict,
+                'loss_self': tqdm_dict,
                # 'progress_bar': tqdm_dict,
-                'accuracy': test_acc,
+                'num': num,
                 'log': tqdm_dict
             })
         
         return output
 
-
     def test_epoch_end(self, outputs):
-        g_loss  = torch.stack([x['g_loss'] for x in outputs]).mean()
         loss_self  = torch.stack([x['loss_self'] for x in outputs]).mean()
-        loss_reconst  = torch.stack([x['loss_reconst'] for x in outputs]).mean()
-        loss_generator  = torch.stack([x['loss_generator'] for x in outputs]).mean()
-        loss_classification  = torch.stack([x['loss_classification'] for x in outputs]).mean()
-        d_loss  = torch.stack([x['d_loss'] for x in outputs]).mean()
-        acc  = torch.stack([x['test_acc'] for x in outputs]).mean()
+        all_num = torch.cat((x['num'] for x in outputs))
+        N = float(all_num.shape[0])
+        
+        acc_2 = torch.sum(all_num.gt(1)).float() / N
+        acc_1 = torch.sum(all_num.eq(1)).float() / N
+        acc_0 = torch.sum(all_num.lt(1)).float() / N
+        acc_all = (2.0 * acc_2 + acc_1) / 2.0
+        acc_allwrong = (2.0 * acc_0 + acc_1) / 2.0
 
-        tqdm_dict = {'g_loss': g_loss, 'loss_self': loss_self, 'loss_reconst': loss_reconst,
-                     'loss_generator': generator_loss, 'loss_classification': loss_classification,
-                      'd_loss', d_loss, 'accuarcy', acc}
+        tqdm_dict = {'acc_allright': acc_2, 'acc_oneright': acc_1, 'acc_zeroright': acc_0,
+                     'acc_all': acc_all, 'acc_allwrong': acc_allwrong}
         output = OrderedDict({
-                'loss': tqdm_dict,
+                'loss_self': loss_self,
                 'progress_bar': tqdm_dict,
-                'accuracy': acc,
+                'accuracy': tqdm_dict,
                 'log': tqdm_dict
             })
 

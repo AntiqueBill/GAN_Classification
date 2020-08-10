@@ -12,9 +12,9 @@ from Structure import Generator, Discriminator
 import pytorch_lightning as pl
 from pytorch_lightning.metrics.functional import accuracy
     
-    #复现文章《Separate In Latent Space: Unsupervised Single Image Layer Separation》的Lss,要最小化这个loss
-    #存在问题：采用文章中的label=generator(clean_input)还是原计划的label = cnn(clean_input)?
-    #这么考虑：自监督用generator(clean_input)，计算mse用cnn(clean_input)
+#复现文章《Separate In Latent Space: Unsupervised Single Image Layer Separation》的Lss,要最小化这个loss
+#存在问题：采用文章中的label=generator(clean_input)还是原计划的label = cnn(clean_input)?
+#这么考虑：自监督用generator(clean_input)，计算mse用cnn(clean_input)
 
 def loss_self(output1, output2, label1, label2, lamda1=0.5, lamda2=0.5, lamda3=1.0, alpha=1.4):
     g_ab = (alpha * torch.exp(torch.tensor(alpha)) - torch.abs(output1 - output2)) / (alpha ** 2)
