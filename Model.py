@@ -12,12 +12,15 @@ from Structure import Generator, Discriminator
 import pytorch_lightning as pl
 from pytorch_lightning.metrics.functional import accuracy
 from Loss import loss_classification, loss_reconst, loss_self, generator_loss, discriminator_loss
+from argparse import ArgumentParser
 
 class GAN(pl.LightningModule):
 
-    def __init__(self, hparams, cnn_classification):
+    def __init__(self, hparams, cnn_classification, *args, **kwargs):
         super(GAN, self).__init__()
         self.hparams = hparams
+
+        self.save_hyperparameters(hparams)
 
         # networks
         
@@ -39,9 +42,24 @@ class GAN(pl.LightningModule):
 
     @staticmethod
     def add_model_specific_args(parent_parser):
-        parser = ArgumentParser(parents=[parent_parser], add_help=False)
-        parser.add_argument('--encoder_layers', type=int, default=12)
-        parser.add_argument('--data_path', type=str, default='/some/path')
+        parser.add_argument('--data_dir', type=str, default='./train_gan.mat')
+        parser.add_argument('--cnn_model_dir', type=str, default='./epoch0.ckpt')
+        parser.add_argument('--loss_self_lamda1', type=float, default=0.5)
+        parser.add_argument('--loss_self_lamda2', type=float, default=0.5)
+        parser.add_argument('--loss_self_lamda3', type=float, default=1.0)
+        parser.add_argument('--loss_self_alpha1', type=float, default=1.4)
+        parser.add_argument('--optim_Adam_lr', type=float, default=0.001)
+        parser.add_argument('--optim_Adam_b1', type=float, default=0.9)
+        parser.add_argument('--optim_Adam_b2', type=float, default=0.999)
+        parser.add_argument('--save_dir', type=str, default='./gan.ckpt')
+        parser.add_argument('--max_epochs', type=int, default=1000)
+        parser.add_argument('--min_epochs', type=int, default=1)
+        parser.add_argument('--load_dir', type=str, default='./gan.ckpt')
+        parser.add_argument('--gpus', type=int, default=1)
+        parser.add_argument('--train', type=bool, default=True)
+        parser.add_argument('--test', type=bool, default=False)
+        parser.add_argument('--batch_size', type=int, default=256)
+        parser.add_argument('--valid', type=float, default=0.2)
         return parser
 
     def training_step(self, batch, batch_nb, optimizer_idx):
@@ -80,7 +98,9 @@ class GAN(pl.LightningModule):
             #试图让生成pure数据时不进行反向传播
             x_pure = x_pure.detach()
             pure1, pure2 = self(x_pure)
-            loss_self = loss_self(self.generator1, self.generator2, pure1, pure2)
+            loss_self = loss_self(self.generator1, self.generator2, pure1, pure2,
+                         self.hparams.lamda1, self.hparams.lamda2, self.hparams.lamda3,
+                         self.hparams.alpha)
             generator_loss = generator_loss(discriminator_input)
 
             g_loss = loss_self + loss_reconst + generator_loss + loss_classification
@@ -129,7 +149,6 @@ class GAN(pl.LightningModule):
                 optimizer.step()
                 optimzer.zero_grad()
 
-    #TODO test步骤的目的依旧是看4个g_loss，加上d_loss(gan后期应该没有意义)，以及最后看准确率
     # 和test步骤书写，目的是关注准确率
     # 测试阶段4个loss，loss_reconst,g_loss,loss_classification因为标签顺序不明都没了，d_loss可以有但没有意义
     # loss_self可以计算，关键是accuracy，这里考虑的是两个pred都算标签然后合起来看总的准确率，

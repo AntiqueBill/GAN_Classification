@@ -13,41 +13,69 @@ from pytorch_lightning.metrics.functional import accuracy
 from torch.utils.data import random_split
 from argparse import Namespace
 from argparse import ArgumentParser
+from pytorch_lightning.loggers import TensorBoardLogger
+import pytorch_lightning.Trainer as Trainer
+from Dataset import GANDataset, GANDataLoader
+from CNN import CNNModel
 
 #TODO 完善parser与主程序（超参数），涉及到Model.py的程序
-parser = ArgumentParser()
 
-# add PROGRAM level args
-parser.add_argument('--conda_env', type=str, default='some_name')
-parser.add_argument('--notification_email', type=str, default='will@email.com')
+def main():
+    parser = ArgumentParser()
 
-# add model specific args
-parser = LitModel.add_model_specific_args(parser)
+    # add PROGRAM level args
+    parser.add_argument('--data_dir', type=str, default='./train_gan.mat')
+    parser.add_argument('--cnn_model_dir', type=str, default='./epoch0.ckpt')
+    parser.add_argument('--loss_self_lamda1', type=float, default=0.5)
+    parser.add_argument('--loss_self_lamda2', type=float, default=0.5)
+    parser.add_argument('--loss_self_lamda3', type=float, default=1.0)
+    parser.add_argument('--loss_self_alpha1', type=float, default=1.4)
+    parser.add_argument('--optim_Adam_lr', type=float, default=0.001)
+    parser.add_argument('--optim_Adam_b1', type=float, default=0.9)
+    parser.add_argument('--optim_Adam_b2', type=float, default=0.999)
+    parser.add_argument('--save_dir', type=str, default='./gan.ckpt')
+    parser.add_argument('--max_epochs', type=int, default=1000)
+    parser.add_argument('--min_epochs', type=int, default=0)
+    parser.add_argument('--load_dir', type=str, default='./gan.ckpt')
+    parser.add_argument('--gpus', type=int, default=1)
+    parser.add_argument('--train', type=bool, default=True)
+    parser.add_argument('--test', type=bool, default=False)
+    parser.add_argument('--batch_size', type=int, default=256)
+    parser.add_argument('--valid', type=float, default=0.2)
 
-# add all the available trainer options to argparse
-# ie: now --gpus --num_nodes ... --fast_dev_run all work in the cli
-parser = Trainer.add_argparse_args(parser)
+    # add model specific args
+    parser = Trainer.add_model_specific_args(parser)
 
-args = parser.parse_args()
-args = {
-    'batch_size': 32,
-    'lr': 0.0002,
-    'b1': 0.5,
-    'b2': 0.999,
-    'latent_dim': 3000
-}
+    # add all the available trainer options to argparse
+    parser = Trainer.add_argparse_args(parser)
 
-hparams = Namespace(**args)
+    args = parser.parse_args()
 
-checkpoint_callback = ModelCheckpoint(
-    filepath=os.getcwd(),
-    save_top_k=1,
-    verbose=True,
-    monitor='val_loss',
-    mode='min'
-)
+    hparams = Namespace(**args)
+    checkpoint_callback = ModelCheckpoint(
+            filepath=args.save_dir,
+            save_top_k=1,
+            verbose=True,
+            monitor='val_loss',
+            mode='min'
+    )
 
-model = GAN(hparams)
-trainer = pl.Trainer(checkpoint_callback=checkpoint_callback)
-trainer.fit(model, train_dataloader=train_dataloader, val_dataloaders=valid_dataloader)
-trainer.test(test_dataloader=test_dataloader)
+    #引入cnn的模型
+    cnnmodel = CNNModel.load_from_checkpoint(args.cnn_model_dir)
+    cnn_features = cnnmodel.cnn
+    cnn_classification = cnnmodel.classification
+
+    data = GANDataLoader(args.batch_size, args.file_dir, cnn_features, args.valid)
+    train_dataloader = data.train_dataloader
+    valid_dataloader = data.val_dataloader
+    test_dataloader = data.test_dataloader
+    
+    logger = TensorBoardLogger("figure", name="GAN_model")
+    trainer = pl.Trainer(checkpoint_callback=checkpoint_callback, logger=logger,
+                        gpus=args.gpus, min_epochs=args.min_epochs, max_epochs=args.max_epochs)
+    if args.train == True：    
+        model = GAN(hparams, cnn_classification)
+        trainer.fit(model, train_dataloader=train_dataloader, val_dataloaders=valid_dataloader)
+    else:    
+        test_model = GAN.load_from_checkpoint(checkpoint_path=args.load_dir)
+        trainer.test(test_model, test_dataloader=test_dataloader)

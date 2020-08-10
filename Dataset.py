@@ -26,8 +26,8 @@ from torch.utils.data import random_split
 # cnn_classification = cnnmodel.classification
 
 class GANDataset(torch.utils.data.Dataset):
-    def __init__(self, train=True, cnn_features):
-        data = h5py.File('test_6AE.mat', 'r')
+    def __init__(self, train=True, file_dir, cnn_features):
+        data = h5py.File(file_dir, 'r')
         self.train = train
         if self.train:
             train_x = np.transpose(data['train_x'])
@@ -96,22 +96,24 @@ class GANDataset(torch.utils.data.Dataset):
 
         return x, y, x_simple1, x_simple2, y_simple1, y_simple2, x_pure
 
-    class MyDataLoader(pl.LightningDataModule):
-        def __init__(self, batch_size):
-            super().__init__()
-            self.batch_size = batch_size
-            train_dataset = GANDataset(train=True)
-            test_dataset = GANDataset(train=False)
-            train_data, valid_data = random_split(train_dataset, [50000, 5000])
-            self.train_dataset = train_data
-            self.valid_dataset = valid_data
-            self.test_dataset = test_dataset
+class GANDataLoader(pl.LightningDataModule):
+    def __init__(self, batch_size, file_dir, cnn_features, valid=0.2):
+        super().__init__()
+        self.batch_size = batch_size
+        train_dataset = GANDataset(train=True, file_dir, cnn_features)
+        test_dataset = GANDataset(train=False, file_dir, cnn_features)
+        valid_num = len(train_dataset) * valid
+        train_num = len(train_dataset) * (1 - valid)
+        train_data, valid_data = random_split(train_dataset, [train_num, valid_num])
+        self.train_dataset = train_data
+        self.valid_dataset = valid_data
+        self.test_dataset = test_dataset
 
-        def train_dataloader(self):
-            return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=False)
+    def train_dataloader(self):
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=False)
 
-        def val_dataloader(self):
-            return DataLoader(self.valid_dataset, batch_size=self.batch_size, shuffle=False)
+    def val_dataloader(self):
+        return DataLoader(self.valid_dataset, batch_size=self.batch_size, shuffle=False)
 
-        def test_dataloader(self):
-            return DataLoader(self.test_dataset, batch_size=256, shuffle=False)
+    def test_dataloader(self):
+        return DataLoader(self.test_dataset, batch_size=256, shuffle=False)
