@@ -11,10 +11,11 @@ from torch.utils.data import DataLoader
 from Structure import Generator, Discriminator
 import pytorch_lightning as pl
 from pytorch_lightning.metrics.functional import accuracy
+from Loss import loss_classification, loss_reconst, loss_self, generator_loss, discriminator_loss
 
 class GAN(pl.LightningModule):
 
-    def __init__(self, hparams):
+    def __init__(self, hparams, cnn_classification):
         super(GAN, self).__init__()
         self.hparams = hparams
 
@@ -22,6 +23,13 @@ class GAN(pl.LightningModule):
         
         self.generator = Generator(input_dim=hparams.input_dim)
         self.discriminator = Discriminator()
+        self.cnn_classification = cnn_classification
+        # 是否必须需要self？
+        # self.loss_classification = loss_classification
+        # self.loss_reconst = loss_reconst
+        # self.loss_self = loss_self
+        # self.generator_loss = generator_loss
+        # self.discriminator_loss = discriminator_loss
 
 
     def forward(self, x):
@@ -35,69 +43,6 @@ class GAN(pl.LightningModule):
         parser.add_argument('--encoder_layers', type=int, default=12)
         parser.add_argument('--data_path', type=str, default='/some/path')
         return parser
-    #复现文章《Separate In Latent Space: Unsupervised Single Image Layer Separation》的Lss,要最小化这个loss
-    #存在问题：采用文章中的label=generator(clean_input)还是原计划的label = cnn(clean_input)?
-    #这么考虑：自监督用generator(clean_input)，计算mse用cnn(clean_input)
-
-    def loss_self(self, output1, output2, label1, label2, lamda1=0.5, lamda2=0.5, lamda3=1.0, alpha=1.4):
-        g_ab = (alpha * torch.exp(alpha) - torch.abs(output1 - output2)) / (alpha^2) 
-        distance_yz = 1 / (1 + torch.exp(g_ab))
-        loss = lamda1 * torch.abs(output1 - label1) + lamda2 * torch.abs(output2 - label2) + lamda3 * (1 - distance_yz)
-
-        return loss
-
-    def discriminator_loss(self, y_hat, y):
-        #采用软标签
-        fake_label = 0.1 * torch.ones_like(y_hat)
-        real_label = 0.9 + 0.1 * torch.rand(self.discrimiator_input.size(0), 1)
-        if self.on_gpu:
-            fake_label = fake_label.cuda()
-            real_label = real_label.cuda()
-        real_loss = F.binary_cross_entropy_with_logits(y, real_label)
-        fake_loss = F.binary_cross_entropy_with_logits(y_hat, fake_label)
-        total_loss = (real_loss + fake_loss) / 2.0
-
-        return total_loss
-
-    #判断输出特征和label特征的对应关系，进行排序，确定最小的是哪一个，然后取对应的loss
-    def loss_reconst(self, output1, output2, label1, label2):
-        loss11 = F.mse_loss(output1, label1)
-        loss12 = F.mse_loss(output1, label1)
-        loss21 = F.mse_loss(output1, label1)
-        loss22 = F.mse_loss(output1, label1)
-
-        a = torch.argmin([loss11, loss12, loss21, loss22])
-        if a == 0 or a == 3:
-            idx = 0
-            loss = loss11 + loss22
-            loss1 = loss11
-            loss2 = loss22
-        elif a == 1 or a == 2:
-            idx = 1
-            loss = loss12 + loss21
-            loss1 = loss21
-            loss2 = loss12
-
-        return idx, loss, loss1, loss2
-
-    #这个loss对照y_pred和y_predict, loss_generator = loss_self+loss_reconst
-    def generator_loss(self, fake_output):
-        #考虑软标签,不过生成器貌似不需要
-        #label = 0.1 * torch.ones_like(fake_output)
-        labels = torch.zeros_like(fake_output)
-        loss_discrimiator = F.binary_cross_entropy_with_logits(fake_output, labels)
-        loss = loss_self + loss_reconst + loss_discrimiator
-
-        return loss
-
-    #第四个loss，对应于classification的loss，前三个分别是自监督loss_self（区分分离特征），重构loss_reconst, 假标签loss：generator_loss 
-    def loss_classification(self, cnn_classification, generator1, generator2, y_simple1, y_simple2):
-        loss1 = F.cross_entropy(cnn_classification(generator1), y_simple1)
-        loss2 = F.cross_entropy(cnn_classification(generator2), y_simple2)
-        loss = (loss1 + loss2) / 2.0
-
-        return loss
-
 
     def training_step(self, batch, batch_nb, optimizer_idx):
         x, y, x_simple1, x_simple2, y_simple1, y_simple2, x_pure = batch
@@ -125,20 +70,18 @@ class GAN(pl.LightningModule):
                 discriminator_label = discriminator_label.cuda()
 
             # loss计算
-            idx, loss_reconst, loss1, loss2 = self.loss_reconst(self.generator1, self.generator2, x_simple1, x_simple2)
+            loss_reconst, x_simple1, x_simple2, y_simple1, y_simple2 = loss_reconst(self.generator1, self.generator2,
+                                                                         x_simple1, x_simple2, y_simple1, y_simple2)
             #根据判定的顺序选取对应的标签拼接构成discriminator的输入
-            if idx == 0:
-                self.discriminator_label = torch.cat((x_simple1, x_simple2), 1)
-            else:
-                self.discriminator_label = torch.cat((x_simple2, x_simple1), 1)
-                change = y_simple1
-                y_simple1 = y_simple2
-                y_simple2 = change
+            self.discriminator_label = torch.cat((x_simple1, x_simple2), 1)
 
             #第四个loss
-            loss_classification = self.loss_classification(cnn_classification, self.generator1, self.generator2, y_simple1, y_simple2)
-            loss_self = self.loss_self(self.generator1, self.generator2, pure1, pure2)
-            generator_loss = self.generator_loss(discriminator_input)
+            loss_classification = loss_classification(self.cnn_classification, self.generator1, self.generator2, y_simple1, y_simple2)
+            #试图让生成pure数据时不进行反向传播
+            x_pure = x_pure.detach()
+            pure1, pure2 = self(x_pure)
+            loss_self = loss_self(self.generator1, self.generator2, pure1, pure2)
+            generator_loss = generator_loss(discriminator_input)
 
             g_loss = loss_self + loss_reconst + generator_loss + loss_classification
 
@@ -154,7 +97,7 @@ class GAN(pl.LightningModule):
         # train discriminator
         if optimizer_idx == 1:
             # Measure discriminator's ability to classify real from generated samples
-            d_loss = self.discriminator_loss(self.discriminator_input, self.discriminator_label)
+            d_loss = discriminator_loss(self.discriminator_input, self.discriminator_label)
 
             tqdm_dict = {'d_loss': d_loss}
             output = OrderedDict({
@@ -164,18 +107,6 @@ class GAN(pl.LightningModule):
             })
             return output
             
-    #TODO valid和test步骤书写，目的是关注准确率
-    def validation_step(self, batch, batch_idx):
-        z = torch.randn(8, self.hparams.latent_dim)
-        # match gpu device (or keep as cpu)
-        if self.on_gpu:
-            z = z.cuda(self.last_imgs.device.index)
-
-        # log sampled images
-        sample_imgs = self(z)
-        grid = torchvision.utils.make_grid(sample_imgs)
-        self.logger.experiment.add_image(f'generated_images', grid, self.current_epoch)
-
     def configure_optimizers(self):
         lr = self.hparams.lr
         b1 = self.hparams.b1
@@ -197,5 +128,67 @@ class GAN(pl.LightningModule):
             if batch_nb % 2 == 0:
                 optimizer.step()
                 optimzer.zero_grad()
+
+    #TODO test步骤的目的依旧是看4个g_loss，加上d_loss(gan后期应该没有意义)，以及最后看准确率
+    # 和test步骤书写，目的是关注准确率
+    def test_step(self, batch, batch_idx):
+        x, y, x_simple1, x_simple2, y_simple1, y_simple2, x_pure = batch
+        generator1, generator2 = self(x)
+
+        pred1 = self.cnn_classification(generator1)
+        pred2 = self.cnn_classification(generator2)
+
+        
+        self.discriminator_label = torch.cat((x_simple1, x_simple2), 1)
+
+        #第四个loss
+        loss_classification = loss_classification(self.cnn_classification, self.generator1, self.generator2, y_simple1, y_simple2)
+        #试图让生成pure数据时不进行反向传播
+        x_pure = x_pure.detach()
+        pure1, pure2 = self(x_pure)
+
+        loss_self = loss_self(generator1, generator2, pure1, pure2)
+        generator_loss = generator_loss(discriminator_input)
+
+        g_loss = loss_self + loss_reconst + generator_loss + loss_classification
+        d_loss = discriminator_loss(self.discriminator_input, self.discriminator_label)
+
+        tqdm_dict = {'g_loss': g_loss, 'loss_self': loss_self, 'loss_reconst': loss_reconst,
+                     'loss_generator': generator_loss, 'loss_classification': loss_classification, 'd_loss', d_loss}
+
+        pred1 = self.cnn_classification(generator1)
+        pred2 = self.cnn_classification(generator2)
+        test_acc = (accuracy(pred1, y_simple1) + accuracy(pred2, y_simple2)) / 2.0
+
+        output = OrderedDict({
+                'loss': tqdm_dict,
+               # 'progress_bar': tqdm_dict,
+                'accuracy': test_acc,
+                'log': tqdm_dict
+            })
+        
+        return output
+
+
+    def test_epoch_end(self, outputs):
+        g_loss  = torch.stack([x['g_loss'] for x in outputs]).mean()
+        loss_self  = torch.stack([x['loss_self'] for x in outputs]).mean()
+        loss_reconst  = torch.stack([x['loss_reconst'] for x in outputs]).mean()
+        loss_generator  = torch.stack([x['loss_generator'] for x in outputs]).mean()
+        loss_classification  = torch.stack([x['loss_classification'] for x in outputs]).mean()
+        d_loss  = torch.stack([x['d_loss'] for x in outputs]).mean()
+        acc  = torch.stack([x['test_acc'] for x in outputs]).mean()
+
+        tqdm_dict = {'g_loss': g_loss, 'loss_self': loss_self, 'loss_reconst': loss_reconst,
+                     'loss_generator': generator_loss, 'loss_classification': loss_classification,
+                      'd_loss', d_loss, 'accuarcy', acc}
+        output = OrderedDict({
+                'loss': tqdm_dict,
+                'progress_bar': tqdm_dict,
+                'accuracy': acc,
+                'log': tqdm_dict
+            })
+
+        return output
 
     
