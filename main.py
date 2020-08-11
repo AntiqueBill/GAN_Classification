@@ -64,14 +64,14 @@ def main():
     cnnmodel = CNNModel.load_from_checkpoint(args.cnn_model_dir)
     cnn_features = cnnmodel.cnn
     cnn_classification = cnnmodel.classification
-
+    
     data = GANDataLoader(args.batch_size, args.file_dir, cnn_features, args.valid)
     train_dataloader = data.train_dataloader
     valid_dataloader = data.val_dataloader
     test_dataloader = data.test_dataloader
     
     logger = TensorBoardLogger("figure", name="GAN_model")
-    trainer = pl.Trainer(checkpoint_callback=checkpoint_callback, logger=logger,
+    trainer = pl.Trainer(checkpoint_callback=checkpoint_callback, logger=logger, progress_bar_refresh_rate=50,
                         gpus=args.gpus, min_epochs=args.min_epochs, max_epochs=args.max_epochs)
     if args.train == True：    
         model = GAN(hparams, cnn_classification)
