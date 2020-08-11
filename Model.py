@@ -11,9 +11,10 @@ from torch.utils.data import DataLoader
 from Structure import Generator, Discriminator
 import pytorch_lightning as pl
 from pytorch_lightning.metrics.functional import accuracy
-from Loss import loss_classification, loss_reconst, loss_self, generator_loss, discriminator_loss, plot_Matrix
+from Loss import loss_classification, loss_reconst, loss_self, generator_loss, discriminator_loss
 from argparse import ArgumentParser
 import sklearn
+from Evaluation import accuracy_calculation
 
 class GAN(pl.LightningModule):
 
@@ -171,19 +172,21 @@ class GAN(pl.LightningModule):
         pure1, pure2 = self(x_pure)
         loss_self = loss_self(generator1, generator2, pure1, pure2)
     
-        tqdm_dict = {'loss_self': loss_self}
+        #tqdm_dict = {'loss_self': loss_self}
 
         pred_all = torch.cat((pred1, pred2), 1)
         pred, _ = torch.sort(pred_all)
         label_all = torch.cat((y_simple1, y_simple2), 1)
         label, _ = torch.sort(label_all)
-        num = torch.sum((pred == label).int(), dim=1)
+        #num = torch.sum((pred == label).int(), dim=1)
+        acc_2, acc_1, acc_0, acc_all, acc_allwrong = accuracy_calculation(pred, label)
+        tqdm_dict = {'acc_allright': acc_2, 'acc_oneright': acc_1, 'acc_zeroright': acc_0,
+                     'acc_all': acc_all, 'acc_allwrong': acc_allwrong}
         output = OrderedDict({
-                'loss_self': tqdm_dict,
+                'loss_self': loss_self,
                # 'progress_bar': tqdm_dict,
                 'pred': pred,
-                'label': label
-                'num': num,
+                'label': label,
                 'log': tqdm_dict
             })
         
@@ -191,22 +194,18 @@ class GAN(pl.LightningModule):
 
     def test_epoch_end(self, outputs):
         loss_self  = torch.stack([x['loss_self'] for x in outputs]).mean()
-        all_num = torch.cat((x['num'] for x in outputs))
+        # all_num = torch.cat((x['num'] for x in outputs))
         all_pred = torch.cat((x['pred'] for x in outputs)).view(-1).numpy()
         all_label = torch.cat((x['label'] for x in outputs)).view(-1).numpy()
         N = float(all_num.shape[0])
 
-        confusion_matrix = sklearn.confusion_matrix(all_label, all_pred)
-        acc_2 = torch.sum(all_num.gt(1)).float() / N
-        acc_1 = torch.sum(all_num.eq(1)).float() / N
-        acc_0 = torch.sum(all_num.lt(1)).float() / N
-        acc_all = (2.0 * acc_2 + acc_1) / 2.0
-        acc_allwrong = (2.0 * acc_0 + acc_1) / 2.0
+        #confusion_matrix = sklearn.confusion_matrix(all_label, all_pred)
+        acc_2, acc_1, acc_0, acc_all, acc_allwrong = accuracy_calculation(all_pred, all_label)
 
         tqdm_dict = {'acc_allright': acc_2, 'acc_oneright': acc_1, 'acc_zeroright': acc_0,
                      'acc_all': acc_all, 'acc_allwrong': acc_allwrong}
 
-        plot_Matrix(confusion_matrix, 6, title='confusion_matrix')
+        #plot_Matrix(confusion_matrix, 6, title='confusion_matrix')
 
         output = OrderedDict({
                 'loss_self': loss_self,
