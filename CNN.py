@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 class AEDataset(torch.utils.data.Dataset):
     def __init__(self, train=True):
         #super(self).__init__()
-        data = h5py.File('test_6AE.mat', 'r')
+        data = h5py.File('./samples/dataset_CNN.mat', 'r')
         self.train = train
         if self.train:
             train_x = np.transpose(data['train_x'])

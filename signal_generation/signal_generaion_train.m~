@@ -1,0 +1,95 @@
+close all;
+clear all;
+clc;
+
+warning off
+
+fc=3.5; %Carrier Frequency
+fs=17.5;  %Sample Frequency
+fd=0.1; %Code Rate
+freqsep=0.2;  %Frequency Interval
+N_code=30;  %Number of Symbols
+N_sample=200;%Number of Initial Samples
+length = 5000;%Final length of signals
+N_samples_m = 10000;
+num_classes = 10;
+
+fc_max = 1.2;
+fc_min = 0.8;
+
+Ac_max = 1.2;
+Ac_min = 0.8;
+
+snr_max = 15;
+snr_min = 0;
+max_targets = 3;
+min_targets = 1;
+
+max_shift = fs*N_code/fd - length;
+
+mode1= zeros(N_sample,length);
+mode2= zeros(N_sample,length);
+mode3= zeros(N_sample,length);
+mode4= zeros(N_sample,length);
+mode5= zeros(N_sample,length);
+mode6= zeros(N_sample,length);
+mode7= zeros(N_sample,length);
+mode8= zeros(N_sample,length);
+mode9= zeros(N_sample,length);
+mode10= zeros(N_sample,length);
+
+fprintf('Generating initial samples...\n');
+for num_sample=1:N_sample    
+    fcc = unifrnd (fc_min, fc_max,10,1);
+    Acc = unifrnd (Ac_min, Ac_max,10,1);
+    shift = unifrnd (0, max_shift,10,1);
+    
+    if mod(num_sample, 500) == 0
+        fprintf('   itr=%d\n',num_sample);
+    end
+    
+    yr=ask2(N_code,fcc(1),fs,fd,Acc(1));
+    yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd));
+    mode1(num_sample,:)=yr(1, shift(1):shift(1)+length-1);   
+    
+    yr=fsk2(N_code,fcc(2),fs,fd,freqsep,Acc(2));
+    yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd));
+    mode2(num_sample,:)=yr(1, shift(2):shift(2)+length-1);
+    
+    yr=fsk4(N_code,fcc(3),fs,fd,freqsep,Acc(3));
+    yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd));
+    mode3(num_sample,:)=yr(1, shift(3):shift(3)+length-1);
+    
+    yr=fsk8(N_code,fcc(4),fs,fd,freqsep,Acc(4));
+    yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd));
+    mode4(num_sample,:)=yr(1, shift(4):shift(4)+length-1);
+    
+    yr=psk2(N_code,fcc(5),fs,fd,Acc(5));
+    yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd));
+    mode5(num_sample,:)=yr(1, shift(5):shift(5)+length-1);
+    
+    yr=psk4(N_code,fcc(6),fs,fd,Acc(6));
+    yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd));
+    mode6(num_sample,:)=yr(1, shift(6):shift(6)+length-1);
+    
+    yr=psk8(N_code,fcc(7),fs,fd,Acc(7));
+    yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd));
+    mode7(num_sample,:)=yr(1, shift(7):shift(7)+length-1);
+    
+    
+    yr=qam16(N_code,fcc(8),fs,fd,Acc(8));
+    yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd));
+    mode8(num_sample,:)=yr(1, shift(8):shift(8)+length-1);
+    
+    yr=qam64(N_code,fcc(9),fs,fd,Acc(9));
+    yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd));
+    mode9(num_sample,:)=yr(1, shift(9):shift(9)+length-1);
+    
+    yr=msk(N_code,fs,fd,fcc(10),Acc(10));
+    yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd));
+    mode10(num_sample,:)=yr(1, shift(10):shift(10)+length-1);
+end
+
+fprintf('Generating overlapped samples...\nMax_target = %d\n', max_targets);
+
+idx = randi(N_sample, num_classes, N_samples_m);
