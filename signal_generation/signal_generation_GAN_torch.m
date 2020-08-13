@@ -10,8 +10,8 @@ fd=2; %Code Rate
 freqsep=1;  %Frequency Interval
 N_code=40;  %Number of Symbols
 length = 3000;%Final length of signals
-N_samples_m = 100;%Number of overlapped samples
-N_samples_test = 50;%Number of overlapped samples
+N_samples_m = 60000;%Number of overlapped samples
+N_samples_test = 6000;%Number of overlapped samples
 num_classes = 6;
 
 fc_max = 1.1;
@@ -60,32 +60,32 @@ for i=1:N_samples_m
     %class_i = sort(class_i);
     fcc = unifrnd (fc_min, fc_max,size(class_i,2),1) * fc;%返回[size(class_i,2),1]大小的从fcmin到fcmax的随机数
     Acc = unifrnd (Ac_min, Ac_max,size(class_i,2),1);%如果为1个混合返回1个数，2个混合返回2个数
-    shift = unifrnd (0, max_shift,size(class_i,2),1);%相位偏移也需要随机
+    shift = floor(unifrnd (1, max_shift,2,1));%相位偏移也需要随机
     y = zeros(2, length);%2种混合就是2行length列  
     for j =1:2
         switch class_i(j)
             case 1
                 yr=ask2(N_code,fcc(j),fs,fd,1);
                 yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                y(j,:) = yr(shift(j):shift(j)+length-1);
                % train_y(i, class_i(j))=1;
                 if j == 1
-                    x_simple1(i, :) = yr(1, shift(j):shift(j)+length-1);
+                    x_simple1(i, :) = yr(shift(j):(shift(j)+length-1));
                     y_simple1(i, :) = 1;
                 else
-                     x_simple2(i, :) = yr(1, shift(j):shift(j)+length-1);
+                     x_simple2(i, :) = yr(shift(j):(shift(j)+length-1));
                      y_simple2(i, :) = 1;
                 end
             case 2
                 yr=fsk2(N_code,fcc(j),fs,fd,freqsep,1);
                 yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):(shift(j)+length-1));
+                y(j,:) = yr(shift(j):(shift(j)+length-1));
                 %train_y(i, class_i(j))=1;
                 if j == 1
-                    x_simple1(i, :) = yr(1, shift(j):shift(j)+length-1);
+                    x_simple1(i, :) = yr(shift(j):shift(j)+length-1);
                     y_simple1(i, :) = 2;
                 else
-                     x_simple2(i, :) = yr(1, shift(j):shift(j)+length-1);
+                     x_simple2(i, :) = yr(shift(j):shift(j)+length-1);
                      y_simple2(i, :) = 2;
                 end
 %             case 3
@@ -96,37 +96,37 @@ for i=1:N_samples_m
             case 3
                 yr=psk2(N_code,fcc(j),fs,fd,1);
                 yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):(shift(j)+length-1));
+                y(j,:) = yr(shift(j):(shift(j)+length-1));
                 %train_y(i, class_i(j))=1;
                 if j == 1
-                    x_simple1(i, :) = yr(1, shift(j):shift(j)+length-1);
+                    x_simple1(i, :) = yr(shift(j):shift(j)+length-1);
                     y_simple1(i, :) = 3;
                 else
-                     x_simple2(i, :) = yr(1, shift(j):shift(j)+length-1);
+                     x_simple2(i, :) = yr(shift(j):shift(j)+length-1);
                      y_simple2(i, :) = 3;
                 end
             case 4
                 yr=psk4(N_code,fcc(j),fs,fd,1);
                 yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                y(j,:) = yr(shift(j):shift(j)+length-1);
                 %train_y(i, class_i(j))=1;
                 if j == 1
-                    x_simple1(i, :) = yr(1, shift(j):shift(j)+length-1);
+                    x_simple1(i, :) = yr(shift(j):shift(j)+length-1);
                     y_simple1(i, :) = 4;
                 else
-                     x_simple2(i, :) = yr(1, shift(j):shift(j)+length-1);
+                     x_simple2(i, :) = yr(shift(j):shift(j)+length-1);
                      y_simple2(i, :) = 4;
                 end
             case 5
                 yr=qam16(N_code,fcc(j),fs,fd,1);
                 yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                y(j,:) = yr(shift(j):shift(j)+length-1);
                 %train_y(i, class_i(j))=1;
                 if j == 1
-                    x_simple1(i, :) = yr(1, shift(j):shift(j)+length-1);
+                    x_simple1(i, :) = yr(shift(j):shift(j)+length-1);
                     y_simple1(i, :) = 5;
                 else
-                     x_simple2(i, :) = yr(1, shift(j):shift(j)+length-1);
+                     x_simple2(i, :) = yr(shift(j):shift(j)+length-1);
                      y_simple2(i, :) = 5;
                 end
 %             case 7
@@ -137,13 +137,13 @@ for i=1:N_samples_m
             case 6
                 yr=msk(N_code,fs,fd,fcc(j),1);
                 yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):(shift(j)+length-1));
+                y(j,:) = yr(shift(j):(shift(j)+length-1));
                 %train_y(i, class_i(j))=6;
                 if j == 1
-                    x_simple1(i, :) = yr(1, shift(j):shift(j)+length-1);
+                    x_simple1(i, :) = yr(shift(j):shift(j)+length-1);
                     y_simple1(i, :) = 6;
                 else
-                     x_simple2(i, :) = yr(1, shift(j):shift(j)+length-1);
+                     x_simple2(i, :) = yr(shift(j):shift(j)+length-1);
                      y_simple2(i, :) = 6;
                 end
         end
@@ -164,32 +164,32 @@ for i=1:N_samples_test
     %class_i = sort(class_i);
     fcc = unifrnd (fc_min, fc_max,size(class_i,2),1) * fc;%返回[size(class_i,2),1]大小的从fcmin到fcmax的随机数
     Acc = unifrnd (Ac_min, Ac_max,size(class_i,2),1);%如果为1个混合返回1个数，2个混合返回2个数
-    shift = unifrnd (0, max_shift,size(class_i,2),1);%相位偏移也需要随机
+    shift = floor(unifrnd (1, max_shift,2,1));%相位偏移也需要随机
     y = zeros(2, length);%2种混合就是2行length列  
     for j =1:2
         switch class_i(j)
             case 1
                 yr=ask2(N_code,fcc(j),fs,fd,1);
                 yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                y(j,:) = yr(shift(j):shift(j)+length-1);
                % train_y(i, class_i(j))=1;
                 if j == 1
-                    test_x_simple1(i, :) = yr(1, shift(j):shift(j)+length-1);
+                    test_x_simple1(i, :) = yr(shift(j):shift(j)+length-1);
                     test_y_simple1(i, :) = 1;
                 else
-                     test_x_simple2(i, :) = yr(1, shift(j):shift(j)+length-1);
+                     test_x_simple2(i, :) = yr(shift(j):shift(j)+length-1);
                      test_y_simple2(i, :) = 1;
                 end
             case 2
                 yr=fsk2(N_code,fcc(j),fs,fd,freqsep,1);
                 yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):(shift(j)+length-1));
+                y(j,:) = yr(shift(j):(shift(j)+length-1));
                 %train_y(i, class_i(j))=1;
                 if j == 1
-                    test_x_simple1(i, :) = yr(1, shift(j):shift(j)+length-1);
+                    test_x_simple1(i, :) = yr(shift(j):shift(j)+length-1);
                     test_y_simple1(i, :) = 2;
                 else
-                     test_x_simple2(i, :) = yr(1, shift(j):shift(j)+length-1);
+                     test_x_simple2(i, :) = yr(shift(j):shift(j)+length-1);
                      test_y_simple2(i, :) = 2;
                 end
 %             case 3
@@ -200,37 +200,37 @@ for i=1:N_samples_test
             case 3
                 yr=psk2(N_code,fcc(j),fs,fd,1);
                 yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):(shift(j)+length-1));
+                y(j,:) = yr(shift(j):(shift(j)+length-1));
                 %train_y(i, class_i(j))=1;
                 if j == 1
-                    test_x_simple1(i, :) = yr(1, shift(j):shift(j)+length-1);
+                    test_x_simple1(i, :) = yr(shift(j):shift(j)+length-1);
                     test_y_simple1(i, :) = 3;
                 else
-                     test_x_simple2(i, :) = yr(1, shift(j):shift(j)+length-1);
+                     test_x_simple2(i, :) = yr(shift(j):shift(j)+length-1);
                      test_y_simple2(i, :) = 3;
                 end
             case 4
                 yr=psk4(N_code,fcc(j),fs,fd,1);
                 yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                y(j,:) = yr(shift(j):shift(j)+length-1);
                 %train_y(i, class_i(j))=1;
                 if j == 1
-                    test_x_simple1(i, :) = yr(1, shift(j):shift(j)+length-1);
+                    test_x_simple1(i, :) = yr(shift(j):shift(j)+length-1);
                     test_y_simple1(i, :) = 4;
                 else
-                     test_x_simple2(i, :) = yr(1, shift(j):shift(j)+length-1);
+                     test_x_simple2(i, :) = yr(shift(j):shift(j)+length-1);
                      test_y_simple2(i, :) = 4;
                 end
             case 5
                 yr=qam16(N_code,fcc(j),fs,fd,1);
                 yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                y(j,:) = yr(shift(j):shift(j)+length-1);
                 %train_y(i, class_i(j))=1;
                 if j == 1
-                    test_x_simple1(i, :) = yr(1, shift(j):shift(j)+length-1);
+                    test_x_simple1(i, :) = yr(shift(j):shift(j)+length-1);
                     test_y_simple1(i, :) = 5;
                 else
-                     test_x_simple2(i, :) = yr(1, shift(j):shift(j)+length-1);
+                     test_x_simple2(i, :) = yr(shift(j):shift(j)+length-1);
                      test_y_simple2(i, :) = 5;
                 end
 %             case 7
@@ -241,13 +241,13 @@ for i=1:N_samples_test
             case 6
                 yr=msk(N_code,fs,fd,fcc(j),1);
                 yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):(shift(j)+length-1));
+                y(j,:) = yr(shift(j):(shift(j)+length-1));
                 %train_y(i, class_i(j))=6;
                 if j == 1
-                    test_x_simple1(i, :) = yr(1, shift(j):shift(j)+length-1);
+                    test_x_simple1(i, :) = yr(shift(j):shift(j)+length-1);
                     test_y_simple1(i, :) = 6;
                 else
-                    test_x_simple2(i, :) = yr(1, shift(j):shift(j)+length-1);
+                    test_x_simple2(i, :) = yr(shift(j):shift(j)+length-1);
                      test_y_simple2(i, :) = 6;
                 end
         end

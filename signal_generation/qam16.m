@@ -15,7 +15,7 @@ function y=qam16(N_code,fc,fs,fd,Ac)
     %title('64进制随机信号');
     %xlabel('信号序列');
     %ylabel('信号幅度');
-    y=modulate(modem.qammod(M),xsym);%�?4QAM调制器对信号进行 
+    y=qammod(xsym, M);%�?4QAM调制器对信号进行 
     
     
     t=1:N_samples;

@@ -10,8 +10,8 @@ fd=2; %Code Rate
 freqsep=1;  %Frequency Interval
 N_code=40;  %Number of Symbols
 length = 3000;%Final length of signals
-N_samples_m = 100;%Number of overlapped samples
-N_samples_test = 10;
+N_samples_m = 20000;%Number of overlapped samples
+N_samples_test = 2000;
 num_classes = 6;
 
 fc_max = 1.1;
@@ -46,44 +46,44 @@ for i=1:N_samples_m
     end
     class_i = randperm(num_classes);%返回一行包含从1到num_classes（这里为8类）的整数。
     class_i = class_i(1);%决定混那几个信号
-    fcc = unifrnd (fc_min, fc_max,size(class_i,2),1)*fc;%返回[size(class_i,2),1]大小的从fcmin到fcmax的随机数
-    Acc = unifrnd (Ac_min, Ac_max,size(class_i,2),1);%如果为1个混合返回1个数，2个混合返回2个数
-    shift = unifrnd (0, max_shift,size(class_i,2),1);%相位偏移也需要随机
+    fcc = unifrnd (fc_min, fc_max,1,1)*fc;%返回[size(class_i,2),1]大小的从fcmin到fcmax的随机数
+    Acc = unifrnd (Ac_min, Ac_max,1,1);%如果为1个混合返回1个数，2个混合返回2个数
+    shift = floor(unifrnd (1, max_shift));%相位偏移也需要随机
     y = zeros(1, length);%2种混合就是2行length列
-    for j =1:size(class_i,2)
-        switch class_i(j)
+    %for j =1:size(class_i,2)
+        switch class_i
             case 1
-                yr=ask2(N_code,fcc(j),fs,fd,1);
-                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                yr=ask2(N_code,fcc,fs,fd,1);
+                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc;
+                y= yr(shift:(shift+length-1));
                 train_y(i, :)=1;
             case 2
-                yr=fsk2(N_code,fcc(j),fs,fd,freqsep,1);
-                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                yr=fsk2(N_code,fcc,fs,fd,freqsep,1);
+                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc;
+                y= yr(shift:(shift+length-1));
                 train_y(i, :)=2;
             case 3
-                yr=psk2(N_code,fcc(j),fs,fd,1);
-                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                yr=psk2(N_code,fcc,fs,fd,1);
+                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc;
+                y= yr(shift:(shift+length-1));
                 train_y(i, :)=3;
             case 4
-                yr=psk4(N_code,fcc(j),fs,fd,1);
-                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                yr=psk4(N_code,fcc,fs,fd,1);
+                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc;
+                y= yr(shift:(shift+length-1));
                 train_y(i, :)=4;
             case 5
-                yr=qam16(N_code,fcc(j),fs,fd,1);
-                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                yr=qam16(N_code,fcc,fs,fd,1);
+                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc;
+                y= yr(shift:(shift+length-1));
                 train_y(i, :)=5;
             case 6
-                yr=msk(N_code,fs,fd,fcc(j),1);
-                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                yr=msk(N_code,fs,fd,fcc,1);
+                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc;
+                y = yr(shift:(shift+length-1));
                 train_y(i, :)=6;
         end
-    end
+    %end
     y_r = mapminmax(y);
     snr = randi([snr_min, snr_max],1);
     train_x(i,:) = awgn(y_r, snr, 'measured','db');
@@ -97,42 +97,42 @@ for i=1:N_samples_test
     class_i = class_i(1);%决定混那几个信号
     fcc = unifrnd (fc_min, fc_max,size(class_i,2),1)*fc;%返回[size(class_i,2),1]大小的从fcmin到fcmax的随机数
     Acc = unifrnd (Ac_min, Ac_max,size(class_i,2),1);%如果为1个混合返回1个数，2个混合返回2个数
-    shift = unifrnd (0, max_shift,size(class_i,2),1);%相位偏移也需要随机
+    shift = floor(unifrnd (1, max_shift));%相位偏移也需要随机
     y = zeros(1, length);%2种混合就是2行length列
-    for j =1:size(class_i,2)
-        switch class_i(j)
+    %for j =1:size(class_i,2)
+        switch class_i
             case 1
-                yr=ask2(N_code,fcc(j),fs,fd,1);
-                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                yr=ask2(N_code,fcc,fs,fd,1);
+                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc;
+                y = yr(shift:(shift+length-1));
                 test_y(i, :)=1;
             case 2
-                yr=fsk2(N_code,fcc(j),fs,fd,freqsep,1);
-                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                yr=fsk2(N_code,fcc,fs,fd,freqsep,1);
+                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc;
+                y = yr(shift:shift+length-1);
                 test_y(i, :)=2;
             case 3
-                yr=psk2(N_code,fcc(j),fs,fd,1);
-                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                yr=psk2(N_code,fcc,fs,fd,1);
+                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc;
+                y = yr(shift:shift+length-1);
                 test_y(i, :)=3;
             case 4
-                yr=psk4(N_code,fcc(j),fs,fd,1);
-                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                yr=psk4(N_code,fcc,fs,fd,1);
+                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc;
+                y = yr(shift:shift+length-1);
                 test_y(i, :)=4;
             case 5
-                yr=qam16(N_code,fcc(j),fs,fd,1);
-                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                yr=qam16(N_code,fcc,fs,fd,1);
+                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc;
+                y = yr(shift:shift+length-1);
                 test_y(i, :)=5;
             case 6
-                yr=msk(N_code,fs,fd,fcc(j),1);
-                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc(j);
-                y(j,:) = yr(1, shift(j):shift(j)+length-1);
+                yr=msk(N_code,fs,fd,fcc,1);
+                yr = yr/sqrt(sum(yr.^2)/(fs*N_code/fd))*Acc;
+                y = yr(shift:shift+length-1);
                 test_y(i, :)=6;
         end
-    end
+    %end
     y_r = mapminmax(y);
     snr = randi([snr_min, snr_max],1);
     test_x(i,:) = awgn(y_r, snr, 'measured','db');
