@@ -14,7 +14,7 @@ from pytorch_lightning.metrics.functional import accuracy
 from Loss import loss_classification, loss_reconst, loss_self, generator_loss, discriminator_loss
 from argparse import ArgumentParser
 import sklearn
-from Evaluation import accuracy_calculation
+from Evaluation import accuracy_calculation, plot_Matrix
 
 class GAN(pl.LightningModule):
 
@@ -173,17 +173,21 @@ class GAN(pl.LightningModule):
         loss_self = loss_self(generator1, generator2, pure1, pure2)
     
         #tqdm_dict = {'loss_self': loss_self}
+        #为了确定y_label是哪一个，目的是为了画混淆矩阵，这里的loss其实并没还有什么意义
+        loss_reconst, _, _, y_simple1, y_simple2 = loss_reconst(generator1, generator2, x_simple1, 
+                                                        x_simple2, y_simple1, y_simple2)
 
-        pred_all = torch.cat((pred1, pred2), 1)
-        pred, _ = torch.sort(pred_all)
-        label_all = torch.cat((y_simple1, y_simple2), 1)
-        label, _ = torch.sort(label_all)
+        pred = torch.cat((pred1, pred2), 1)
+        #pred, _ = torch.sort(pred_all)
+        label = torch.cat((y_simple1, y_simple2), 1)
+        #label, _ = torch.sort(label_all)
         #num = torch.sum((pred == label).int(), dim=1)
+        
         acc_2, acc_1, acc_0, acc_all, acc_allwrong = accuracy_calculation(pred, label)
         tqdm_dict = {'acc_allright': acc_2, 'acc_oneright': acc_1, 'acc_zeroright': acc_0,
                      'acc_all': acc_all, 'acc_allwrong': acc_allwrong}
         output = OrderedDict({
-                'loss_self': loss_self,
+                'loss': {'loss_self': loss_self, 'loss_reconst': loss_reconst},
                # 'progress_bar': tqdm_dict,
                 'pred': pred,
                 'label': label,
@@ -199,13 +203,13 @@ class GAN(pl.LightningModule):
         all_label = torch.cat((x['label'] for x in outputs)).view(-1).numpy()
         N = float(all_num.shape[0])
 
-        #confusion_matrix = sklearn.confusion_matrix(all_label, all_pred)
+        confusion_matrix = sklearn.confusion_matrix(all_label, all_pred)
         acc_2, acc_1, acc_0, acc_all, acc_allwrong = accuracy_calculation(all_pred, all_label)
 
         tqdm_dict = {'acc_allright': acc_2, 'acc_oneright': acc_1, 'acc_zeroright': acc_0,
                      'acc_all': acc_all, 'acc_allwrong': acc_allwrong}
 
-        #plot_Matrix(confusion_matrix, 6, title='confusion_matrix')
+        plot_Matrix(confusion_matrix, 6, title='confusion_matrix')
 
         output = OrderedDict({
                 'loss_self': loss_self,
