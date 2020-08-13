@@ -30,14 +30,14 @@ class GANDataset(torch.utils.data.Dataset):
         data = h5py.File(file_dir, 'r')
         self.train = train
         if self.train:
-            train_x = np.transpose(data['train_x'])
+            train_x = np.array(data['train_x'])
             train_y = np.transpose(data['train_y'])
             #train_y -= 1
-            x_simple1 =  np.transpose(data['x_simple1'])
-            x_simple2 =  np.transpose(data['x_simple2'])
+            x_simple1 =  np.array(data['x_simple1'])
+            x_simple2 =  np.array(data['x_simple2'])
             y_simple1 =  np.transpose(data['y_simple1'])
             y_simple2 =  np.transpose(data['y_simple2'])
-            x_pure = np.transpose(data['x_pure'])
+            x_pure = np.array(data['x_pure'])
             
             self.train_x = torch.from_numpy(train_x).unsqueeze(1).float()
             x_simple1 = torch.from_numpy(x_simple1).unsqueeze(1).float()
@@ -56,14 +56,14 @@ class GANDataset(torch.utils.data.Dataset):
             print("train_y.shape:", self.train_y.shape)
             print("train_x_simple1.shape", self.x_simple1.shape)
         else:
-            test_x = np.transpose(data['test_x']) 
+            test_x = np.array(data['test_x']) 
             test_y = np.transpose(data['test_y'])
             #test_y -= 1 
-            x_simple1 =  np.transpose(data['test_x_simple1'])
-            x_simple2 =  np.transpose(data['test_x_simple2'])
+            x_simple1 =  np.array(data['test_x_simple1'])
+            x_simple2 =  np.array(data['test_x_simple2'])
             y_simple1 =  np.transpose(data['test_y_simple1'])
             y_simple2 =  np.transpose(data['test_y_simple2'])
-            x_pure = np.transpose(data['test_x_pure'])
+            x_pure = np.array(data['test_x_pure'])
 
             self.test_x = torch.from_numpy(test_x).unsqueeze(1).float()
             x_simple1 = torch.from_numpy(x_simple1).unsqueeze(1).float()
