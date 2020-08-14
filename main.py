@@ -14,18 +14,15 @@ from torch.utils.data import random_split
 from argparse import Namespace
 from argparse import ArgumentParser
 from pytorch_lightning.loggers import TensorBoardLogger
-import pytorch_lightning.Trainer as Trainer
 from Dataset import GANDataset, GANDataLoader
 from CNN import CNNModel
-
-#TODO 完善parser与主程序（超参数），涉及到Model.py的程序
 
 def main():
     parser = ArgumentParser()
 
     # add PROGRAM level args
-    parser.add_argument('--data_dir', type=str, default='./train_gan.mat')
-    parser.add_argument('--cnn_model_dir', type=str, default='./epoch0.ckpt')
+    parser.add_argument('--data_dir', type=str, default='./samples/dataset_GAN.mat')
+    parser.add_argument('--cnn_model_dir', type=str, default='./checkpoint/cnn.ckpt')
     parser.add_argument('--loss_self_lamda1', type=float, default=0.5)
     parser.add_argument('--loss_self_lamda2', type=float, default=0.5)
     parser.add_argument('--loss_self_lamda3', type=float, default=1.0)
@@ -33,10 +30,10 @@ def main():
     parser.add_argument('--optim_Adam_lr', type=float, default=0.001)
     parser.add_argument('--optim_Adam_b1', type=float, default=0.9)
     parser.add_argument('--optim_Adam_b2', type=float, default=0.999)
-    parser.add_argument('--save_dir', type=str, default='./gan.ckpt')
+    parser.add_argument('--save_dir', type=str, default='./checkpoint/gan/gan.ckpt')
     parser.add_argument('--max_epochs', type=int, default=1000)
     parser.add_argument('--min_epochs', type=int, default=0)
-    parser.add_argument('--load_dir', type=str, default='./gan.ckpt')
+    parser.add_argument('--load_dir', type=str, default='../checkpoint/gan/gan.ckpt')
     parser.add_argument('--gpus', type=int, default=1)
     parser.add_argument('--train', type=bool, default=True)
     parser.add_argument('--test', type=bool, default=False)
@@ -44,10 +41,10 @@ def main():
     parser.add_argument('--valid', type=float, default=0.2)
 
     # add model specific args
-    parser = Trainer.add_model_specific_args(parser)
+    parser = pl.Trainer.add_model_specific_args(parser)
 
     # add all the available trainer options to argparse
-    parser = Trainer.add_argparse_args(parser)
+    parser = pl.Trainer.add_argparse_args(parser)
 
     args = parser.parse_args()
 
@@ -65,15 +62,15 @@ def main():
     cnn_features = cnnmodel.cnn
     cnn_classification = cnnmodel.classification
     
-    data = GANDataLoader(args.batch_size, args.file_dir, cnn_features, args.valid)
-    train_dataloader = data.train_dataloader
-    valid_dataloader = data.val_dataloader
-    test_dataloader = data.test_dataloader
+    data = GANDataLoader(args.batch_size, args.data_dir, cnn_features, args.valid)
+    train_dataloader = data.train_dataloader()
+    valid_dataloader = data.val_dataloader()
+    test_dataloader = data.test_dataloader()
     
-    logger = TensorBoardLogger("figure", name="GAN_model")
+    logger = TensorBoardLogger(save_dir="./lightning_logs",name='gan_logs')
     trainer = pl.Trainer(checkpoint_callback=checkpoint_callback, logger=logger, progress_bar_refresh_rate=50,
                         gpus=args.gpus, min_epochs=args.min_epochs, max_epochs=args.max_epochs)
-    if args.train == True：    
+    if args.train == True:    
         model = GAN(hparams, cnn_classification)
         trainer.fit(model, train_dataloader=train_dataloader, val_dataloaders=valid_dataloader)
     else:    

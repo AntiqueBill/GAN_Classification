@@ -176,8 +176,9 @@ class GAN(pl.LightningModule):
         #为了确定y_label是哪一个，目的是为了画混淆矩阵，这里的loss其实并没还有什么意义
         loss_reconst, _, _, y_simple1, y_simple2 = loss_reconst(generator1, generator2, x_simple1, 
                                                         x_simple2, y_simple1, y_simple2)
-
-        pred = torch.cat((pred1, pred2), 1)
+        labels_pred1 = torch.argmax(pred1, dim=1)
+        labels_pred2 = torch.argmax(pred2, dim=1)
+        pred = torch.cat(labels_pred1, labels_pred2), 1)
         #pred, _ = torch.sort(pred_all)
         label = torch.cat((y_simple1, y_simple2), 1)
         #label, _ = torch.sort(label_all)
