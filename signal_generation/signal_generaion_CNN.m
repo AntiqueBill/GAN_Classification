@@ -10,8 +10,8 @@ fd=2; %Code Rate
 freqsep=1;  %Frequency Interval
 N_code=40;  %Number of Symbols
 length = 3000;%Final length of signals
-N_samples_m = 20000;%Number of overlapped samples
-N_samples_test = 2000;
+N_samples_m = 100000;%Number of overlapped samples
+N_samples_test = 10000;
 num_classes = 6;
 
 fc_max = 1.1;
@@ -23,7 +23,7 @@ Ac_min = 0.9;
 %for gg=-5:15
     
 snr_max = 15;
-snr_min = 0;
+snr_min = 5;
 max_targets = 1;
 min_targets = 1;
 
