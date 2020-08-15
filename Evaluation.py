@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from Structure import Generator, Discriminator
 import pytorch_lightning as pl
 from pytorch_lightning.metrics.functional import accuracy
-
+import matplotlib.pyplot as plt
 
 def accuracy_calculation(pred, label):
     pred, label = pred.numpy(), label.numpy

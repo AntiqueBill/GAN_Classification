@@ -1,6 +1,6 @@
 import os
 from collections import OrderedDict
-
+import h5py
 import numpy as np
 import torch
 import torch.nn as nn
@@ -26,8 +26,8 @@ from torch.utils.data import random_split
 # cnn_classification = cnnmodel.classification
 
 class GANDataset(torch.utils.data.Dataset):
-    def __init__(self, train=True, file_dir, cnn_features):
-        data = h5py.File(file_dir, 'r')
+    def __init__(self, cnn_features, data_dir='./samples/dataset_GAN.mat', train=True):
+        data = h5py.File(data_dir, 'r')
         self.train = train
         if self.train:
             train_x = np.array(data['train_x'])
@@ -96,14 +96,14 @@ class GANDataset(torch.utils.data.Dataset):
 
         return x, y, x_simple1, x_simple2, y_simple1, y_simple2, x_pure
 
-class GANDataLoader(pl.LightningDataModule):
-    def __init__(self, batch_size, file_dir, cnn_features, valid=0.2):
+class GANDataModule(pl.LightningDataModule):
+    def __init__(self, batch_size, cnn_features, data_dir='./samples/dataset_GAN.mat', valid=0.2):
         super().__init__()
         self.batch_size = batch_size
-        train_dataset = GANDataset(train=True, file_dir, cnn_features)
-        test_dataset = GANDataset(train=False, file_dir, cnn_features)
-        valid_num = len(train_dataset) * valid
-        train_num = len(train_dataset) * (1 - valid)
+        train_dataset = GANDataset(cnn_features, data_dir, train=True)
+        test_dataset = GANDataset(cnn_features, data_dir, train=False)
+        valid_num = int(len(train_dataset) * valid)
+        train_num = int(len(train_dataset) * (1 - valid))
         train_data, valid_data = random_split(train_dataset, [train_num, valid_num])
         self.train_dataset = train_data
         self.valid_dataset = valid_data

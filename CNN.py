@@ -73,16 +73,23 @@ class CNNModel(pl.LightningModule):
             nn.Conv1d(30, 25, 9, 3),
             nn.ELU(),
             nn.Conv1d(25, 20, 9, 3),
+            nn.ELU(),
+            nn.MaxPool1d(3),
             nn.Flatten(),
-            nn.Linear(2160, 512),
+            nn.Linear(720, 500),
             nn.ELU(),
-            nn.Linear(512, 300),
+            nn.BatchNorm1d(500),
+            nn.Linear(500, 300),
             nn.ELU(),
+            nn.BatchNorm1d(300),
             nn.Linear(300, 200),
             nn.ELU(),
+            nn.BatchNorm1d(200),
             nn.Linear(200, 120),
             nn.ELU(),
-            nn.Linear(120, 60),
+            nn.BatchNorm1d(120),
+            nn.Linear(120, 60)
+            #nn.ELU(),,
         )
         #self.features = nn.Linear(60, 40)
         self.classification = nn.Sequential(
@@ -95,28 +102,41 @@ class CNNModel(pl.LightningModule):
         #called with self(x)
         features = self.cnn(x)
         output = self.classification(features)
-        return output, features
+        return output
 
     def training_step(self, batch, batch_idx):
         x, y = batch
-        y_hat = self(x)[0]
+        y_hat = self(x)
         loss_fun = nn.CrossEntropyLoss()
         loss = loss_fun(y_hat, y)
         tensorboard_logs = {'train_loss': loss}
         return {'loss': loss, 'log': tensorboard_logs}
+    
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        #print('val_x.shape', x.shape)
+        y_hat = self(x)
+        loss_fun = nn.CrossEntropyLoss()
+        loss = loss_fun(y_hat, y)
+        tensorboard_logs = {'val_loss': loss}
+        return {'val_loss': loss, 'log': tensorboard_logs}
 
     def test_step(self, batch, batch_idx):
         x, y = batch
+        y_hat = self(x)
+        #print('y_hat.shape', y_hat.shape)
+        #print('y.shape', y.shape)
         loss_fun = nn.CrossEntropyLoss()
         loss = loss_fun(y_hat, y)
         labels_hat = torch.argmax(y_hat, dim=1)
-        test_acc = torch.sum(y == labels_hat.int()).item() / (len(y) * 1.0)
+        test_acc = accuracy(labels_hat, y)
+        #test_acc = (y_hat == y).sum()
         test_output = {'test_loss': loss, 'test_acc': test_acc}
         return test_output
 
     def test_epoch_end(self, test_step_outputs):
-        test_epoch_loss = torch.stack([x['loss'] for x in test_output]).mean()
-        test_epoch_acc = torch.stack([x['acc'] for x in test_output]).mean()
+        test_epoch_loss = torch.stack([x['test_loss'] for x in test_step_outputs]).mean()
+        test_epoch_acc = torch.stack([x['test_acc'] for x in test_step_outputs]).mean()
         return {
             'test_loss': test_epoch_loss,
             'log':{'avg_test_loss': test_epoch_loss, 'avg_test_acc': test_epoch_acc}

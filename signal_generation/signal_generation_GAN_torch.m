@@ -10,8 +10,8 @@ fd=2; %Code Rate
 freqsep=1;  %Frequency Interval
 N_code=40;  %Number of Symbols
 length = 3000;%Final length of signals
-N_samples_m = 60000;%Number of overlapped samples
-N_samples_test = 6000;%Number of overlapped samples
+N_samples_m = 1000;%Number of overlapped samples
+N_samples_test = 500;%Number of overlapped samples
 num_classes = 6;
 
 fc_max = 1.1;
@@ -277,7 +277,7 @@ test_y_simple1 = test_y_simple1';
 test_y_simple2 = test_y_simple2';
 test_x_pure = test_x_pure';
 test_y = test_y';
-save(strcat('../samples/dataset_MAMC_gan'),...
+save(strcat('../samples/dataset_GAN'),...
 'train_x','train_y','x_pure','x_simple1','x_simple2', 'y_simple1', 'y_simple2',...
 'test_x','test_y','test_x_pure','test_x_simple1','test_x_simple2', 'test_y_simple1', 'test_y_simple2',...
 'Ac','fc', 'snr','length','-v7.3')

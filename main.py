@@ -9,19 +9,53 @@ import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
-from pytorch_lightning.metrics.functional import accuracy
+from pytorch_lightning.metrics.functional.classification import accuracy
 from torch.utils.data import random_split
-from argparse import Namespace
-from argparse import ArgumentParser
+from argparse import Namespace, ArgumentParser
 from pytorch_lightning.loggers import TensorBoardLogger
-from Dataset import GANDataset, GANDataLoader
+from pytorch_lightning.callbacks import ModelCheckpoint
+from Dataset import GANDataset, GANDataModule
 from CNN import CNNModel
+from Model import GAN
 
-def main():
+def main(hparams):
+
+    checkpoint_callback = ModelCheckpoint(
+            filepath=hparams.save_dir,
+            save_top_k=1,
+            verbose=True,
+            monitor='val_loss',
+            mode='min'
+    )
+
+    #引入cnn的模型
+    cnnmodel = CNNModel.load_from_checkpoint(hparams.cnn_model_dir)
+    cnn_features = cnnmodel.cnn
+    cnn_classification = cnnmodel.classification
+    
+    datamodule = GANDataModule(hparams.batch_size, cnn_features, hparams.data_dir, hparams.valid)
+    # train_dataloader = data.train_dataloader()
+    # valid_dataloader = data.val_dataloader()
+    # test_dataloader = data.test_dataloader()
+    
+    logger = TensorBoardLogger(save_dir="./lightning_logs",name='gan_logs')
+    # trainer = pl.Trainer(checkpoint_callback=checkpoint_callback, logger=logger, progress_bar_refresh_rate=50,
+    #                     gpus=hparams.gpus, min_epochs=hparams.min_epochs, max_epochs=hparams.max_epochs)
+    # trainer = pl.Trainer(hparams, checkpoint_callback=checkpoint_callback, logger=logger, progress_bar_refresh_rate=50)
+    trainer = pl.Trainer.from_argparse_args(hparams, checkpoint_callback=checkpoint_callback, logger=logger, progress_bar_refresh_rate=50)
+    if hparams.train == True:    
+        model = GAN(cnn_classification, hparams)
+        trainer.fit(model, datamodule=datamodule)
+    else:    
+        test_model = GAN.load_from_checkpoint(checkpoint_path=hparams.load_dir)
+        trainer.test(test_model, datamodule=datamodule)
+
+if __name__ == "__main__":
+    
     parser = ArgumentParser()
 
-    # add PROGRAM level args
-    parser.add_argument('--data_dir', type=str, default='./samples/dataset_GAN.mat')
+    # add PROGRAM level hparams
+    parser.add_argument('--data_dir', type=str, default='./samples/dataset_GAN.mat')   
     parser.add_argument('--cnn_model_dir', type=str, default='./checkpoint/cnn.ckpt')
     parser.add_argument('--loss_self_lamda1', type=float, default=0.5)
     parser.add_argument('--loss_self_lamda2', type=float, default=0.5)
@@ -39,40 +73,14 @@ def main():
     parser.add_argument('--test', type=bool, default=False)
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--valid', type=float, default=0.2)
+    parser.add_argument('--input_dim', type=int, default=3000)
 
-    # add model specific args
-    parser = pl.Trainer.add_model_specific_args(parser)
-
+    # add model specific hparams
+    #parser = GAN.add_model_specific_args(parser)
+    #print('parser', parser)
     # add all the available trainer options to argparse
-    parser = pl.Trainer.add_argparse_args(parser)
-
-    args = parser.parse_args()
-
-    hparams = Namespace(**args)
-    checkpoint_callback = ModelCheckpoint(
-            filepath=args.save_dir,
-            save_top_k=1,
-            verbose=True,
-            monitor='val_loss',
-            mode='min'
-    )
-
-    #引入cnn的模型
-    cnnmodel = CNNModel.load_from_checkpoint(args.cnn_model_dir)
-    cnn_features = cnnmodel.cnn
-    cnn_classification = cnnmodel.classification
-    
-    data = GANDataLoader(args.batch_size, args.data_dir, cnn_features, args.valid)
-    train_dataloader = data.train_dataloader()
-    valid_dataloader = data.val_dataloader()
-    test_dataloader = data.test_dataloader()
-    
-    logger = TensorBoardLogger(save_dir="./lightning_logs",name='gan_logs')
-    trainer = pl.Trainer(checkpoint_callback=checkpoint_callback, logger=logger, progress_bar_refresh_rate=50,
-                        gpus=args.gpus, min_epochs=args.min_epochs, max_epochs=args.max_epochs)
-    if args.train == True:    
-        model = GAN(hparams, cnn_classification)
-        trainer.fit(model, train_dataloader=train_dataloader, val_dataloaders=valid_dataloader)
-    else:    
-        test_model = GAN.load_from_checkpoint(checkpoint_path=args.load_dir)
-        trainer.test(test_model, test_dataloader=test_dataloader)
+    # parser = pl.Trainer.add_argparse_args(parser)
+    hparams = parser.parse_args()
+    #hparams = pl.Trainer.add_argparse_args(hparams)
+    #hparams = Namespace(**hparams)
+    main(hparams)

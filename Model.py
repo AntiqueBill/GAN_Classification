@@ -10,7 +10,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from Structure import Generator, Discriminator
 import pytorch_lightning as pl
-from pytorch_lightning.metrics.functional import accuracy
+from pytorch_lightning.metrics.functional.classification import accuracy
 from Loss import loss_classification, loss_reconst, loss_self, generator_loss, discriminator_loss
 from argparse import ArgumentParser
 import sklearn
@@ -18,7 +18,7 @@ from Evaluation import accuracy_calculation, plot_Matrix
 
 class GAN(pl.LightningModule):
 
-    def __init__(self, hparams, cnn_classification, *args, **kwargs):
+    def __init__(self, cnn_classification, hparams, *args, **kwargs):
         super(GAN, self).__init__()
         self.hparams = hparams
 
@@ -41,28 +41,6 @@ class GAN(pl.LightningModule):
         generator1, generator2 = self.generator(x)
 
         return generator1, generator2
-
-    @staticmethod
-    def add_model_specific_args(parent_parser):
-        parser.add_argument('--data_dir', type=str, default='./train_gan.mat')
-        parser.add_argument('--cnn_model_dir', type=str, default='./epoch0.ckpt')
-        parser.add_argument('--loss_self_lamda1', type=float, default=0.5)
-        parser.add_argument('--loss_self_lamda2', type=float, default=0.5)
-        parser.add_argument('--loss_self_lamda3', type=float, default=1.0)
-        parser.add_argument('--loss_self_alpha1', type=float, default=1.4)
-        parser.add_argument('--optim_Adam_lr', type=float, default=0.001)
-        parser.add_argument('--optim_Adam_b1', type=float, default=0.9)
-        parser.add_argument('--optim_Adam_b2', type=float, default=0.999)
-        parser.add_argument('--save_dir', type=str, default='./gan.ckpt')
-        parser.add_argument('--max_epochs', type=int, default=1000)
-        parser.add_argument('--min_epochs', type=int, default=1)
-        parser.add_argument('--load_dir', type=str, default='./gan.ckpt')
-        parser.add_argument('--gpus', type=int, default=1)
-        parser.add_argument('--train', type=bool, default=True)
-        parser.add_argument('--test', type=bool, default=False)
-        parser.add_argument('--batch_size', type=int, default=256)
-        parser.add_argument('--valid', type=float, default=0.2)
-        return parser
 
     def training_step(self, batch, batch_nb, optimizer_idx):
         x, y, x_simple1, x_simple2, y_simple1, y_simple2, x_pure = batch
@@ -178,7 +156,7 @@ class GAN(pl.LightningModule):
                                                         x_simple2, y_simple1, y_simple2)
         labels_pred1 = torch.argmax(pred1, dim=1)
         labels_pred2 = torch.argmax(pred2, dim=1)
-        pred = torch.cat(labels_pred1, labels_pred2), 1)
+        pred = torch.cat((labels_pred1, labels_pred2), 1)
         #pred, _ = torch.sort(pred_all)
         label = torch.cat((y_simple1, y_simple2), 1)
         #label, _ = torch.sort(label_all)
