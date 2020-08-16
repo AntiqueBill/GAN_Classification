@@ -24,6 +24,7 @@ class GAN(pl.LightningModule):
 
         self.save_hyperparameters(hparams)
 
+        #self.using_native_amp = False # in order to solve optimizer_step problem
         # networks
         
         self.generator = Generator(input_dim=hparams.input_dim)
@@ -117,8 +118,9 @@ class GAN(pl.LightningModule):
     
         return [opt_g, opt_d], []
 
-    def optimizer_step(self, current_epoch, batch_nb, optimizer, optimizer_i):
+    def optimizer_step(self, current_epoch, batch_nb, optimizer, optimizer_i, on_tpu=False, using_native_amp=False):
         # 希望更多次更新discriminator
+        
         if optimizer_i == 0:
             if batch_nb % 4 == 0:
                 optimizer.step()
@@ -134,12 +136,93 @@ class GAN(pl.LightningModule):
     # loss_self可以计算，关键是accuracy，这里考虑的是两个pred都算标签然后合起来看总的准确率，
     # 分为全对，半对，都不对三种，并计算总共预测对的数目，需要统计对的个数，所以test只有两个loss，loss_self和d_loss(没用)
     # 加上一个accuracy
+
+    def validation_step(self, batch, batch_idx):
+        x, y, x_simple1, x_simple2, y_simple1, y_simple2, x_pure = batch
+        generator1, generator2 = self(x)
+
+        pred1 = self.cnn_classification(generator1)
+        pred2 = self.cnn_classification(generator2)
+
+        loss_re, _, _, y_simple1, y_simple2 = loss_reconst(generator1, generator2, x_simple1, 
+                                                        x_simple2, y_simple1, y_simple2)
+        labels_pred1 = torch.argmax(pred1, dim=1).unsqueeze(1)
+        labels_pred2 = torch.argmax(pred2, dim=1).unsqueeze(1)
+        pred = torch.cat((labels_pred1, labels_pred2), 1)
+
+        #pred, _ = torch.sort(pred_all)
+        label = torch.cat((y_simple1, y_simple2), 1)
+        #label, _ = torch.sort(label_all)
+        #num = torch.sum((pred == label).int(), dim=1)
+        loss_classify = loss_classification(self.cnn_classification, generator1, generator2, y_simple1, y_simple2)
+        acc_2, acc_1, acc_0, acc_all, acc_allwrong = accuracy_calculation(pred, label)
+
+        x_pure = x_pure.detach()
+        pure1, pure2 = self(x_pure)
+        discriminator_input = torch.cat((generator1, generator2), 1)
+        discriminator_label = torch.cat((x_simple1, x_simple2), 1)
+        d_loss = discriminator_loss(discriminator_input, discriminator_label)
+        self_loss = loss_self(generator1, generator2, pure1, pure2,
+                         self.hparams.loss_self_lamda1, self.hparams.loss_self_lamda2, self.hparams.loss_self_lamda3,
+                         self.hparams.loss_self_alpha)
+
+        loss_g = generator_loss(discriminator_input)
+
+        g_loss = self_loss + loss_re + loss_g + loss_classify
+
+        loss_dict = {'g_loss': g_loss, 'loss_self': self_loss, 'loss_reconst': loss_re,
+                     'loss_generator': loss_g, 'loss_classification': loss_classify, 'd_loss': d_loss}
+
+        acc_dict = {'acc_allright': acc_2, 'acc_oneright': acc_1, 'acc_zeroright': acc_0,
+                     'acc_all': acc_all, 'acc_allwrong': acc_allwrong}
+        output = OrderedDict({
+                'val_loss': loss_dict,
+               # 'progress_bar': tqdm_dict,
+                'val_accuracy': acc_dict,
+                'log': {'val_loss': loss_dict, 'val_accuracy': acc_dict}
+            })
+
+        return output
+
+    def validation_epoch_end(self, val_step_outputs):
+        g_loss = torch.stack([x['val_loss']['g_loss'] for x in val_step_outputs]).mean()
+        self_loss = torch.stack([x['val_loss']['loss_self'] for x in val_step_outputs]).mean()
+        loss_re = torch.stack([x['val_loss']['loss_reconst'] for x in val_step_outputs]).mean()
+        loss_g = torch.stack([x['val_loss']['loss_generator'] for x in val_step_outputs]).mean()
+        loss_classify = torch.stack([x['val_loss']['loss_classification'] for x in val_step_outputs]).mean()
+        d_loss = torch.stack([x['val_loss']['d_loss'] for x in val_step_outputs]).mean()
+
+        acc_allright = torch.stack([x['val_accuracy']['acc_allright'] for x in val_step_outputs]).mean()
+        acc_oneright = torch.stack([x['val_accuracy']['acc_oneright'] for x in val_step_outputs]).mean()
+        acc_zeroright = torch.stack([x['val_accuracy']['acc_zeroright'] for x in val_step_outputs]).mean()
+        acc_all = torch.stack([x['val_accuracy']['acc_all'] for x in val_step_outputs]).mean()
+        acc_allwrong = torch.stack([x['val_accuracy']['acc_allwrong'] for x in val_step_outputs]).mean()
+
+        loss_dict = {'g_loss': g_loss, 'loss_self': self_loss, 'loss_reconst': loss_re,
+                     'loss_generator': loss_g, 'loss_classification': loss_classify, 'd_loss': d_loss}
+
+        acc_dict = {'acc_allright': acc_allright, 'acc_oneright': acc_oneright, 'acc_zeroright': acc_zeroright,
+                     'acc_all': acc_all, 'acc_allwrong': acc_allwrong}
+
+        output = OrderedDict({
+            'val_loss': loss_dict,
+            # 'progress_bar': tqdm_dict,
+            'val_accuracy': acc_dict,
+            'log': {'val_loss': loss_dict, 'val_accuracy': acc_dict}
+            })
+
+        return output
+
     def test_step(self, batch, batch_idx):
         x, y, x_simple1, x_simple2, y_simple1, y_simple2, x_pure = batch
         generator1, generator2 = self(x)
 
         pred1 = self.cnn_classification(generator1)
         pred2 = self.cnn_classification(generator2)
+
+        x_pure = x_pure.detach()
+        pure1, pure2 = self(x_pure)
+        self_loss = loss_self(generator1, generator2, pure1, pure2)
 
         # discriminator_loss 这个也要顺序，所以继续无视，只剩loss_self一种
         # self.discriminator_input = torch.cat((generator1, generator2), 1)
@@ -154,8 +237,8 @@ class GAN(pl.LightningModule):
         #为了确定y_label是哪一个，目的是为了画混淆矩阵，这里的loss其实并没还有什么意义
         loss_re, _, _, y_simple1, y_simple2 = loss_reconst(generator1, generator2, x_simple1, 
                                                         x_simple2, y_simple1, y_simple2)
-        labels_pred1 = torch.argmax(pred1, dim=1)
-        labels_pred2 = torch.argmax(pred2, dim=1)
+        labels_pred1 = torch.argmax(pred1, dim=1).unsqueeze(1)
+        labels_pred2 = torch.argmax(pred2, dim=1).unsqueeze(1)
         pred = torch.cat((labels_pred1, labels_pred2), 1)
         #pred, _ = torch.sort(pred_all)
         label = torch.cat((y_simple1, y_simple2), 1)

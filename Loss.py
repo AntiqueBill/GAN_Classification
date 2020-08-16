@@ -27,7 +27,7 @@ def loss_self(output1, output2, label1, label2, lamda1=0.5, lamda2=0.5, lamda3=1
 def discriminator_loss(y_hat, y):
     #采用软标签
     fake_label = 0.1 * torch.ones_like(y_hat)
-    real_label = 0.9 + 0.1 * torch.rand(self.discrimiator_input.size(0), 1)
+    real_label = 0.9 + 0.1 * torch.rand_like(y)
     if torch.cuda.is_available():
         fake_label = fake_label.cuda()
         real_label = real_label.cuda()

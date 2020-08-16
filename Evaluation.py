@@ -14,7 +14,7 @@ from pytorch_lightning.metrics.functional import accuracy
 import matplotlib.pyplot as plt
 
 def accuracy_calculation(pred, label):
-    pred, label = pred.numpy(), label.numpy
+    pred, label = pred.numpy(), label.numpy()
     N = len(pred)
     all_num = []
     for i in range(N):
