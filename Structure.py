@@ -12,42 +12,47 @@ import pytorch_lightning as pl
 from pytorch_lightning.metrics.functional import accuracy
 
 class Generator(nn.Module):
-    def __init__(self, latent_dim):
+    def __init__(self, input_dim=3000):
         super(Generator, self).__init__()
-        self.latent_dim = latent_dim
+        self.input_dim = input_dim
 
         def cnnblock(in_channel, out_channel, kernel_size, stride=1, normalize=True):
             layers = [nn.Conv1d(in_channel, out_channel, kernel_size, stride)]
             if normalize:
-                layers.append(nn.BatchNorm1d(out_channel, 0.8))
+                layers.append(nn.BatchNorm1d(out_channel))
             layers.append(nn.LeakyReLU(0.2, inplace=True))
             return layers
 
+        # set batchnorm1d=32 because the input of generator is 256*32*739, 
+        # if nn.Flatten, the input is 256*(32*739), but if not use nn.Flatten, 
+        # the output of self.generator will be [N, 32, 60], so I have to use Flatten
         def block(in_feat, out_feat, normalize=True):
             layers = [nn.Linear(in_feat, out_feat)]
             if normalize:
-                layers.append(nn.BatchNorm1d(out_feat, 0.8))
+                layers.append(nn.BatchNorm1d(out_feat))
             layers.append(nn.LeakyReLU(0.2, inplace=True))
             return layers
 
         self.cnn = nn.Sequential(
-            *cnnblock(1, 256, 5, 2, normalize=False),
-            *cnnblock(256, 128, 5, 2),
-            *cnnblock(128, 64, 5),
-            *cnnblock(64, 32, 5)
-            #nn.Flatten()
+            *cnnblock(1, 256, 5, 3, normalize=False),
+            *cnnblock(256, 128, 5, 3),
+            *cnnblock(128, 64, 5, 2, normalize=False),
+            *cnnblock(64, 32, 5, 2),
+            *cnnblock(32, 16, 3, normalize=False),
+            *cnnblock(16, 8, 3),          
+            nn.Flatten()
         )
 
         self.generator1 = nn.Sequential(
-            *block(736, 512, normalize=False),
-            *block(512, 400),
+            *block(608, 500, normalize=False),
+            *block(500, 400),
             *block(400, 200, normalize=False),
             *block(200, 60)
         )
 
         self.generator2 = nn.Sequential(
-            *block(736, 512, normalize=False),
-            *block(512, 400),
+            *block(608, 500, normalize=False),
+            *block(500, 400),
             *block(400, 200, normalize=False),
             *block(200, 60)
         )
@@ -59,7 +64,7 @@ class Generator(nn.Module):
         return generator1, generator2
 
 class Discriminator(nn.Module):
-    def __init__(self, img_shape):
+    def __init__(self):
         super(Discriminator, self).__init__()
 
         def block(in_feat, out_feat, normalize=True):

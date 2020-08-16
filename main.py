@@ -60,7 +60,7 @@ if __name__ == "__main__":
     parser.add_argument('--loss_self_lamda1', type=float, default=0.5)
     parser.add_argument('--loss_self_lamda2', type=float, default=0.5)
     parser.add_argument('--loss_self_lamda3', type=float, default=1.0)
-    parser.add_argument('--loss_self_alpha1', type=float, default=1.4)
+    parser.add_argument('--loss_self_alpha', type=float, default=1.4)
     parser.add_argument('--optim_Adam_lr', type=float, default=0.001)
     parser.add_argument('--optim_Adam_b1', type=float, default=0.9)
     parser.add_argument('--optim_Adam_b2', type=float, default=0.999)

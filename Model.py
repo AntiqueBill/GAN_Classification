@@ -68,25 +68,25 @@ class GAN(pl.LightningModule):
                 discriminator_label = discriminator_label.cuda()
 
             # loss计算
-            loss_reconst, x_simple1, x_simple2, y_simple1, y_simple2 = loss_reconst(self.generator1, self.generator2,
+            loss_re, x_simple1, x_simple2, y_simple1, y_simple2 = loss_reconst(self.generator1, self.generator2,
                                                                          x_simple1, x_simple2, y_simple1, y_simple2)
             #根据判定的顺序选取对应的标签拼接构成discriminator的输入
             self.discriminator_label = torch.cat((x_simple1, x_simple2), 1)
 
             #第四个loss
-            loss_classification = loss_classification(self.cnn_classification, self.generator1, self.generator2, y_simple1, y_simple2)
+            loss_classify = loss_classification(self.cnn_classification, self.generator1, self.generator2, y_simple1, y_simple2)
             #试图让生成pure数据时不进行反向传播
             x_pure = x_pure.detach()
             pure1, pure2 = self(x_pure)
-            loss_self = loss_self(self.generator1, self.generator2, pure1, pure2,
-                         self.hparams.lamda1, self.hparams.lamda2, self.hparams.lamda3,
-                         self.hparams.alpha)
-            generator_loss = generator_loss(discriminator_input)
+            self_loss = loss_self(self.generator1, self.generator2, pure1, pure2,
+                         self.hparams.loss_self_lamda1, self.hparams.loss_self_lamda2, self.hparams.loss_self_lamda3,
+                         self.hparams.loss_self_alpha)
+            loss_g = generator_loss(self.discriminator_input)
 
-            g_loss = loss_self + loss_reconst + generator_loss + loss_classification
+            g_loss = self_loss + loss_re + loss_g + loss_classify
 
-            tqdm_dict = {'g_loss': g_loss, 'loss_self': loss_self, 'loss_reconst': loss_reconst,
-                     'loss_generator': generator_loss, 'loss_classification': loss_classification}
+            tqdm_dict = {'g_loss': g_loss, 'loss_self': self_loss, 'loss_reconst': loss_re,
+                     'loss_generator': loss_g, 'loss_classification': loss_classify}
             output = OrderedDict({
                 'loss': g_loss,
                 #'progress_bar': tqdm_dict,
@@ -108,9 +108,9 @@ class GAN(pl.LightningModule):
             return output
             
     def configure_optimizers(self):
-        lr = self.hparams.lr
-        b1 = self.hparams.b1
-        b2 = self.hparams.b2
+        lr = self.hparams.optim_Adam_lr
+        b1 = self.hparams.optim_Adam_b1
+        b2 = self.hparams.optim_Adam_b2
 
         opt_g = torch.optim.Adam(self.generator.parameters(), lr=lr, betas=(b1, b2))
         opt_d = torch.optim.Adam(self.discriminator.parameters(), lr=lr, betas=(b1, b2))
@@ -148,11 +148,11 @@ class GAN(pl.LightningModule):
         #试图让生成pure数据时不进行反向传播
         x_pure = x_pure.detach()
         pure1, pure2 = self(x_pure)
-        loss_self = loss_self(generator1, generator2, pure1, pure2)
+        self_loss = loss_self(generator1, generator2, pure1, pure2)
     
         #tqdm_dict = {'loss_self': loss_self}
         #为了确定y_label是哪一个，目的是为了画混淆矩阵，这里的loss其实并没还有什么意义
-        loss_reconst, _, _, y_simple1, y_simple2 = loss_reconst(generator1, generator2, x_simple1, 
+        loss_re, _, _, y_simple1, y_simple2 = loss_reconst(generator1, generator2, x_simple1, 
                                                         x_simple2, y_simple1, y_simple2)
         labels_pred1 = torch.argmax(pred1, dim=1)
         labels_pred2 = torch.argmax(pred2, dim=1)
@@ -166,7 +166,7 @@ class GAN(pl.LightningModule):
         tqdm_dict = {'acc_allright': acc_2, 'acc_oneright': acc_1, 'acc_zeroright': acc_0,
                      'acc_all': acc_all, 'acc_allwrong': acc_allwrong}
         output = OrderedDict({
-                'loss': {'loss_self': loss_self, 'loss_reconst': loss_reconst},
+                'loss': {'loss_self': self_loss, 'loss_reconst': loss_re},
                # 'progress_bar': tqdm_dict,
                 'pred': pred,
                 'label': label,
@@ -176,7 +176,7 @@ class GAN(pl.LightningModule):
         return output
 
     def test_epoch_end(self, outputs):
-        loss_self  = torch.stack([x['loss_self'] for x in outputs]).mean()
+        self_loss  = torch.stack([x['loss_self'] for x in outputs]).mean()
         # all_num = torch.cat((x['num'] for x in outputs))
         all_pred = torch.cat((x['pred'] for x in outputs)).view(-1).numpy()
         all_label = torch.cat((x['label'] for x in outputs)).view(-1).numpy()
@@ -191,7 +191,7 @@ class GAN(pl.LightningModule):
         plot_Matrix(confusion_matrix, 6, title='confusion_matrix')
 
         output = OrderedDict({
-                'loss_self': loss_self,
+                'loss_self': self_loss,
                 'progress_bar': tqdm_dict,
                 'accuracy': tqdm_dict,
                 'log': tqdm_dict

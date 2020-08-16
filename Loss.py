@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
+import copy
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from Structure import Generator, Discriminator
@@ -59,11 +60,15 @@ def loss_reconst(output1, output2, label1, label2, y_label1, y_label2):
             #idx.append(1)
             loss1.append(loss12)
             loss2.append(loss21)
-            c = copy.deepcopy(label1[i])
+            # can not use copy function in torch, cause "Only Tensors
+            # created explicitly by the user (graph leaves) support the
+            #  deepcopy protocol at the moment" problem, consider clone() function
+            #c = copy.deepcopy(label1[i])
+            c = label1[i].clone()
             label1[i] = label2[i]
             label2[i] = c
 
-            c = copy.deepcopy(y_label1[i])
+            c = y_label1[i].clone()
             y_label1[i] = y_label2[i]
             y_label2[i] = c
             
@@ -73,20 +78,23 @@ def loss_reconst(output1, output2, label1, label2, y_label1, y_label2):
 
     return loss, label1, label2, y_label1, y_label2
 
-    #这个loss对照y_pred和y_predict, loss_generator = loss_self+loss_reconst
 def generator_loss(fake_output):
     #考虑软标签,不过生成器貌似不需要
     #label = 0.1 * torch.ones_like(fake_output)
     labels = torch.zeros_like(fake_output)
     if torch.cuda.is_available():
         labels = labels.cuda()
-    loss_discrimiator = F.binary_cross_entropy_with_logits(fake_output, labels)
-    loss = loss_self + loss_reconst + loss_discrimiator
+    loss = F.binary_cross_entropy_with_logits(fake_output, labels)
 
     return loss
 
 #第四个loss，对应于classification的loss，前三个分别是自监督loss_self（区分分离特征），重构loss_reconst, 假标签loss：generator_loss 
 def loss_classification(cnn_classification, generator1, generator2, y_simple1, y_simple2):
+    # can not use F.cross_entropy(cnn_classification(generator1), y_simple1) directly
+    # because the output is [batch, 6] and y_simple1 is [batch, 1]
+    # consider squeeze to transform [batch, 1] to [batch]
+    y_simple1 = y_simple1.squeeze()
+    y_simple2 = y_simple2.squeeze()
     loss1 = F.cross_entropy(cnn_classification(generator1), y_simple1)
     loss2 = F.cross_entropy(cnn_classification(generator2), y_simple2)
     loss = (loss1 + loss2) / 2.0

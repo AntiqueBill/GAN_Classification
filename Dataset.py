@@ -31,12 +31,12 @@ class GANDataset(torch.utils.data.Dataset):
         self.train = train
         if self.train:
             train_x = np.array(data['train_x'])
-            train_y = np.transpose(data['train_y'])
+            train_y = np.array(data['train_y']) - 1
             #train_y -= 1
             x_simple1 =  np.array(data['x_simple1'])
             x_simple2 =  np.array(data['x_simple2'])
-            y_simple1 =  np.transpose(data['y_simple1'])
-            y_simple2 =  np.transpose(data['y_simple2'])
+            y_simple1 =  np.array(data['y_simple1']) - 1
+            y_simple2 =  np.array(data['y_simple2']) - 1 
             x_pure = np.array(data['x_pure'])
             
             self.train_x = torch.from_numpy(train_x).unsqueeze(1).float()
@@ -49,20 +49,22 @@ class GANDataset(torch.utils.data.Dataset):
             self.y_simple1 = torch.from_numpy(y_simple1).long()
             self.y_simple2 = torch.from_numpy(y_simple2).long()
             self.train_y = torch.from_numpy(train_y).squeeze().long()
-            #self.x_pure = torch.from_numpy(x_pure).unsqueeze(1).float()
+            self.x_pure = torch.from_numpy(x_pure).unsqueeze(1).float()
             #self.train_y = F.one_hot(train_y)
 
             print("train_x.shape:", self.train_x.shape)
             print("train_y.shape:", self.train_y.shape)
             print("train_x_simple1.shape", self.x_simple1.shape)
+            print('x_simple1.shape', self.x_simple1.shape)
+            print('y_simple1.shape', self.y_simple1.shape)
         else:
             test_x = np.array(data['test_x']) 
-            test_y = np.transpose(data['test_y'])
+            test_y = np.array(data['test_y']) - 1
             #test_y -= 1 
             x_simple1 =  np.array(data['test_x_simple1'])
             x_simple2 =  np.array(data['test_x_simple2'])
-            y_simple1 =  np.transpose(data['test_y_simple1'])
-            y_simple2 =  np.transpose(data['test_y_simple2'])
+            y_simple1 =  np.array(data['test_y_simple1']) - 1
+            y_simple2 =  np.array(data['test_y_simple2']) - 1
             x_pure = np.array(data['test_x_pure'])
 
             self.test_x = torch.from_numpy(test_x).unsqueeze(1).float()
@@ -81,6 +83,7 @@ class GANDataset(torch.utils.data.Dataset):
             print("test_x.shape:", self.test_x.shape)
             print("test_y.shape:", self.test_y.shape)
             print('test_x_simple.shape', self.x_simple1.shape)
+            print('test_y_simple1.shape', self.y_simple1.shape)
 
     def __len__(self):
         if self.train:
@@ -90,9 +93,9 @@ class GANDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         if self.train:
-            x, y, x_simple1, x_simple2, y_simple1, y_simple2, x_pure = self.train_x[index], self.train_y[index], self.x_simple1[index],        self.x_simple2[index], self.y_simple1[index], self.y_simple2[index],self.x_pure[index] 
+            x, y, x_simple1, x_simple2, y_simple1, y_simple2, x_pure = self.train_x[index], self.train_y[index], self.x_simple1[index], self.x_simple2[index], self.y_simple1[index], self.y_simple2[index],self.x_pure[index] 
         else:
-            x, y, x_simple1, x_simple2, y_simple1, y_simple2, x_pure = self.test_x[index], self.test_y[index], self.x_simple1[index],         self.x_simple2[index], self.y_simple1[index], self.y_simple2[index], self.x_pure[index]
+            x, y, x_simple1, x_simple2, y_simple1, y_simple2, x_pure = self.test_x[index], self.test_y[index], self.x_simple1[index], self.x_simple2[index], self.y_simple1[index], self.y_simple2[index], self.x_pure[index]
 
         return x, y, x_simple1, x_simple2, y_simple1, y_simple2, x_pure
 
