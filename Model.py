@@ -27,6 +27,8 @@ class GAN(pl.LightningModule):
         #self.using_native_amp = False # in order to solve optimizer_step problem
         # networks
         
+        for param in cnn_classification.parameters():
+            param.requires_grad = False
         self.generator = Generator(input_dim=hparams.input_dim)
         self.discriminator = Discriminator()
         self.cnn_classification = cnn_classification
@@ -47,34 +49,36 @@ class GAN(pl.LightningModule):
         x, y, x_simple1, x_simple2, y_simple1, y_simple2, x_pure = batch
         #self.last_imgs = imgs
         #选择最开始就将其转化为特征，这里的x_simple1和x_simple2均为特征
+                    # match gpu device (or keep as cpu)
+        if self.on_gpu:
+            x = x.cuda()
         # train generator
         if optimizer_idx == 0:
-
-            # match gpu device (or keep as cpu)
-            if self.on_gpu:
-                x = x.cuda()
 
             # generate images
             self.generator1, self.generator2 = self(x)
             pure1, pure2 = self(x_pure)
 
             # loss
-            self.discriminator_input = torch.cat((self.generator1, self.generator2), 1)
+            discriminator_input = torch.cat((self.generator1, self.generator2), 1)
             
             #这个是软标签，用来提升性能，不知道好不好使,训练discriminator用
             # discriminator_label = 0.9 + 0.1 * torch.rand(self.discrimiator_input.size(0), 1) 
             # discriminator_label = torch.zeros(self.discrimiator_input.size(0), 1)
 
-            if self.on_gpu:
-                discriminator_label = discriminator_label.cuda()
-
             # loss计算
             loss_re, x_simple1, x_simple2, y_simple1, y_simple2 = loss_reconst(self.generator1, self.generator2,
                                                                          x_simple1, x_simple2, y_simple1, y_simple2)
             #根据判定的顺序选取对应的标签拼接构成discriminator的输入
-            self.discriminator_label = torch.cat((x_simple1, x_simple2), 1)
-
+            discriminator_label = torch.cat((x_simple1, x_simple2), 1)
+            if self.on_gpu:
+                discriminator_label = discriminator_label.cuda()
             #第四个loss
+            self.d_input = discriminator_input.detach()
+            self.d_input.requires_grad = True
+            self.d_label = discriminator_label.detach()
+            self.d_label.requires_grad = True
+
             loss_classify = loss_classification(self.cnn_classification, self.generator1, self.generator2, y_simple1, y_simple2)
             #试图让生成pure数据时不进行反向传播
             x_pure = x_pure.detach()
@@ -82,12 +86,13 @@ class GAN(pl.LightningModule):
             self_loss = loss_self(self.generator1, self.generator2, pure1, pure2,
                          self.hparams.loss_self_lamda1, self.hparams.loss_self_lamda2, self.hparams.loss_self_lamda3,
                          self.hparams.loss_self_alpha)
-            loss_g = generator_loss(self.discriminator_input)
+            loss_g = generator_loss(discriminator_input)
 
             g_loss = self_loss + loss_re + loss_g + loss_classify
 
             tqdm_dict = {'g_loss': g_loss, 'loss_self': self_loss, 'loss_reconst': loss_re,
                      'loss_generator': loss_g, 'loss_classification': loss_classify}
+
             output = OrderedDict({
                 'loss': g_loss,
                 #'progress_bar': tqdm_dict,
@@ -98,8 +103,10 @@ class GAN(pl.LightningModule):
         # train discriminator
         if optimizer_idx == 1:
             # Measure discriminator's ability to classify real from generated samples
-            d_loss = discriminator_loss(self.discriminator_input, self.discriminator_label)
 
+            d_loss = discriminator_loss(self.d_input, self.d_label)
+            print('d_loss', d_loss)
+            #self.logger.experiment.add_graph(GAN(self.cnn_classification, self.hparams), x)
             tqdm_dict = {'d_loss': d_loss}
             output = OrderedDict({
                 'loss': d_loss,
@@ -118,6 +125,17 @@ class GAN(pl.LightningModule):
     
         return [opt_g, opt_d], []
 
+    # def on_before_backward(self, loss, optimizer_idx):
+    #     opt = {'loss': loss,
+    #     'skip_backward': False,
+    #     'retain_graph': False}
+
+    #     if optimizer_idx < 1:
+    #         opt['retain_graph']=True
+
+    #     return opt
+
+
     def optimizer_step(self, current_epoch, batch_nb, optimizer, optimizer_i, on_tpu=False, using_native_amp=False):
         # 希望更多次更新discriminator
         
@@ -127,9 +145,9 @@ class GAN(pl.LightningModule):
                 optimizer.zero_grad()
 
         if optimizer_i == 1:
-            if batch_nb % 2 == 0:
+            if batch_nb % 3 == 0:
                 optimizer.step()
-                optimzer.zero_grad()
+                optimizer.zero_grad()
 
     # 和test步骤书写，目的是关注准确率
     # 测试阶段4个loss，loss_reconst,g_loss,loss_classification因为标签顺序不明都没了，d_loss可以有但没有意义
@@ -138,9 +156,10 @@ class GAN(pl.LightningModule):
     # 加上一个accuracy
 
     def validation_step(self, batch, batch_idx):
+        print('Validation_step start......\n')
         x, y, x_simple1, x_simple2, y_simple1, y_simple2, x_pure = batch
         generator1, generator2 = self(x)
-
+       
         pred1 = self.cnn_classification(generator1)
         pred2 = self.cnn_classification(generator2)
 
@@ -175,28 +194,31 @@ class GAN(pl.LightningModule):
 
         acc_dict = {'acc_allright': acc_2, 'acc_oneright': acc_1, 'acc_zeroright': acc_0,
                      'acc_all': acc_all, 'acc_allwrong': acc_allwrong}
+
+        tqdm_dict = {**loss_dict, **acc_dict}
         output = OrderedDict({
-                'val_loss': loss_dict,
+                'val_loss': g_loss,
                # 'progress_bar': tqdm_dict,
-                'val_accuracy': acc_dict,
-                'log': {'val_loss': loss_dict, 'val_accuracy': acc_dict}
+                'val_acc': acc_all,
+                'log': tqdm_dict
             })
 
         return output
 
     def validation_epoch_end(self, val_step_outputs):
-        g_loss = torch.stack([x['val_loss']['g_loss'] for x in val_step_outputs]).mean()
-        self_loss = torch.stack([x['val_loss']['loss_self'] for x in val_step_outputs]).mean()
-        loss_re = torch.stack([x['val_loss']['loss_reconst'] for x in val_step_outputs]).mean()
-        loss_g = torch.stack([x['val_loss']['loss_generator'] for x in val_step_outputs]).mean()
-        loss_classify = torch.stack([x['val_loss']['loss_classification'] for x in val_step_outputs]).mean()
-        d_loss = torch.stack([x['val_loss']['d_loss'] for x in val_step_outputs]).mean()
+        print('Validation_epoch_end start......\n')
+        g_loss = torch.stack([x['log']['g_loss'] for x in val_step_outputs]).mean()
+        self_loss = torch.stack([x['log']['loss_self'] for x in val_step_outputs]).mean()
+        loss_re = torch.stack([x['log']['loss_reconst'] for x in val_step_outputs]).mean()
+        loss_g = torch.stack([x['log']['loss_generator'] for x in val_step_outputs]).mean()
+        loss_classify = torch.stack([x['log']['loss_classification'] for x in val_step_outputs]).mean()
+        d_loss = torch.stack([x['log']['d_loss'] for x in val_step_outputs]).mean()
 
-        acc_allright = torch.stack([x['val_accuracy']['acc_allright'] for x in val_step_outputs]).mean()
-        acc_oneright = torch.stack([x['val_accuracy']['acc_oneright'] for x in val_step_outputs]).mean()
-        acc_zeroright = torch.stack([x['val_accuracy']['acc_zeroright'] for x in val_step_outputs]).mean()
-        acc_all = torch.stack([x['val_accuracy']['acc_all'] for x in val_step_outputs]).mean()
-        acc_allwrong = torch.stack([x['val_accuracy']['acc_allwrong'] for x in val_step_outputs]).mean()
+        acc_allright = torch.stack([x['log']['acc_allright'] for x in val_step_outputs]).mean()
+        acc_oneright = torch.stack([x['log']['acc_oneright'] for x in val_step_outputs]).mean()
+        acc_zeroright = torch.stack([x['log']['acc_zeroright'] for x in val_step_outputs]).mean()
+        acc_all = torch.stack([x['log']['acc_all'] for x in val_step_outputs]).mean()
+        acc_allwrong = torch.stack([x['log']['acc_allwrong'] for x in val_step_outputs]).mean()
 
         loss_dict = {'g_loss': g_loss, 'loss_self': self_loss, 'loss_reconst': loss_re,
                      'loss_generator': loss_g, 'loss_classification': loss_classify, 'd_loss': d_loss}
@@ -204,16 +226,19 @@ class GAN(pl.LightningModule):
         acc_dict = {'acc_allright': acc_allright, 'acc_oneright': acc_oneright, 'acc_zeroright': acc_zeroright,
                      'acc_all': acc_all, 'acc_allwrong': acc_allwrong}
 
+        tqdm_dict = {**loss_dict, **acc_dict}
+
         output = OrderedDict({
-            'val_loss': loss_dict,
+            'val_loss': g_loss,
             # 'progress_bar': tqdm_dict,
-            'val_accuracy': acc_dict,
-            'log': {'val_loss': loss_dict, 'val_accuracy': acc_dict}
+            'val_acc': acc_all,
+            'log': tqdm_dict
             })
 
         return output
 
     def test_step(self, batch, batch_idx):
+        print('Test_step start......\n')
         x, y, x_simple1, x_simple2, y_simple1, y_simple2, x_pure = batch
         generator1, generator2 = self(x)
 
@@ -259,6 +284,7 @@ class GAN(pl.LightningModule):
         return output
 
     def test_epoch_end(self, outputs):
+        print('Test_epoch_end start......\n')
         self_loss  = torch.stack([x['loss_self'] for x in outputs]).mean()
         # all_num = torch.cat((x['num'] for x in outputs))
         all_pred = torch.cat((x['pred'] for x in outputs)).view(-1).numpy()
